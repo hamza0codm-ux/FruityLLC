@@ -9,15 +9,15 @@ import {
     cashOutFruitGarden,
     buildFruitGardenEmbed,
     buildFruitGardenComponents,
-} from '../../services/fruitGardenService.js';
+} from '../../../services/fruitGardenService.js';
 
 import {
     handleInteractionError,
-} from '../../utils/errorHandler.js';
+} from '../../../utils/errorHandler.js';
 
 import {
     InteractionHelper,
-} from '../../utils/interactionHelper.js';
+} from '../../../utils/interactionHelper.js';
 
 
 /*
@@ -34,9 +34,7 @@ const growFruitGardenButton = {
         client
     ) {
         try {
-            if (
-                !interaction.guildId
-            ) {
+            if (!interaction.guildId) {
                 await InteractionHelper.safeReply(
                     interaction,
                     {
@@ -70,9 +68,14 @@ const growFruitGardenButton = {
                     interaction.user.id
                 );
 
+            /*
+            |--------------------------------------------------------------------------
+            | Garden Failed
+            |--------------------------------------------------------------------------
+            */
+
             if (
-                result.result ===
-                'failed'
+                result.result === 'failed'
             ) {
                 const embed =
                     buildFruitGardenEmbed(
@@ -92,12 +95,18 @@ const growFruitGardenButton = {
                     interaction,
                     {
                         content:
-                            '💥 Your Fruit Garden failed.',
+                            '💥 Your Fruit Garden failed. You lost your bet.',
                     }
                 );
 
                 return;
             }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Successful Plant
+            |--------------------------------------------------------------------------
+            */
 
             const embed =
                 buildFruitGardenEmbed(
@@ -160,9 +169,7 @@ const cashOutFruitGardenButton = {
         client
     ) {
         try {
-            if (
-                !interaction.guildId
-            ) {
+            if (!interaction.guildId) {
                 await InteractionHelper.safeReply(
                     interaction,
                     {
