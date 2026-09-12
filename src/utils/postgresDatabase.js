@@ -13,6 +13,7 @@ import {
     isTempBackedType,
     getStructuredListPlan,
 } from './database/keyParser.js';
+import { runKeyMigration } from './database/keyMigration.js';
 import {
     tableStatements,
     indexStatements,
