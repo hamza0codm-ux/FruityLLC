@@ -22,183 +22,72 @@ import {
 
 /*
 |--------------------------------------------------------------------------
-| Fruit Garden Buttons
+| Grow Button
 |--------------------------------------------------------------------------
 */
 
-export default [
-    {
-        name: 'fg_grow',
+const growFruitGardenButton = {
+    name: 'fg_grow',
 
-        async execute(
-            interaction,
-            client
-        ) {
-            try {
-                if (!interaction.guildId) {
-                    await interaction.reply({
+    async execute(
+        interaction,
+        client
+    ) {
+        try {
+            if (!interaction.guildId) {
+                await InteractionHelper.safeReply(
+                    interaction,
+                    {
                         content:
                             'Fruit Garden can only be used inside a server.',
                         flags:
                             MessageFlags.Ephemeral,
-                    });
-
-                    return;
-                }
-
-                const deferred =
-                    await InteractionHelper.safeDefer(
-                        interaction,
-                        {
-                            flags:
-                                MessageFlags.Ephemeral,
-                        }
-                    );
-
-                if (!deferred) {
-                    return;
-                }
-
-                const result =
-                    await growFruitGarden(
-                        client,
-                        interaction.guildId,
-                        interaction.user.id
-                    );
-
-                /*
-                |--------------------------------------------------------------------------
-                | Garden Failed
-                |--------------------------------------------------------------------------
-                */
-
-                if (
-                    result.result === 'failed'
-                ) {
-                    const embed =
-                        buildFruitGardenEmbed(
-                            interaction.user,
-                            result.garden,
-                            'failed'
-                        );
-
-                    await InteractionHelper.safeEditReply(
-                        interaction,
-                        {
-                            embeds: [embed],
-                            components: [],
-                        }
-                    );
-
-                    return;
-                }
-
-                /*
-                |--------------------------------------------------------------------------
-                | Successful Growth
-                |--------------------------------------------------------------------------
-                */
-
-                const embed =
-                    buildFruitGardenEmbed(
-                        interaction.user,
-                        result.garden,
-                        'success'
-                    );
-
-                const components =
-                    buildFruitGardenComponents(
-                        result.garden
-                    );
-
-                /*
-                |--------------------------------------------------------------------------
-                | Update the original game message.
-                |--------------------------------------------------------------------------
-                */
-
-                await interaction.message.edit({
-                    embeds: [embed],
-                    components,
-                });
-
-                await InteractionHelper.safeEditReply(
-                    interaction,
-                    {
-                        content:
-                            '🌱 Your garden grew successfully!',
                     }
                 );
 
-            } catch (error) {
-                await handleInteractionError(
-                    interaction,
-                    error,
-                    {
-                        type: 'button',
-                        handler: 'fg_grow',
-                        customId:
-                            interaction.customId,
-                    }
-                );
+                return;
             }
-        },
-    },
 
-    {
-        name: 'fg_cashout',
-
-        async execute(
-            interaction,
-            client
-        ) {
-            try {
-                if (!interaction.guildId) {
-                    await interaction.reply({
-                        content:
-                            'Fruit Garden can only be used inside a server.',
+            const deferred =
+                await InteractionHelper.safeDefer(
+                    interaction,
+                    {
                         flags:
                             MessageFlags.Ephemeral,
-                    });
+                    }
+                );
 
-                    return;
-                }
+            if (!deferred) {
+                return;
+            }
 
-                const deferred =
-                    await InteractionHelper.safeDefer(
-                        interaction,
-                        {
-                            flags:
-                                MessageFlags.Ephemeral,
-                        }
-                    );
+            const result =
+                await growFruitGarden(
+                    client,
+                    interaction.guildId,
+                    interaction.user.id
+                );
 
-                if (!deferred) {
-                    return;
-                }
+            /*
+            |--------------------------------------------------------------------------
+            | Failed
+            |--------------------------------------------------------------------------
+            */
 
-                const result =
-                    await cashOutFruitGarden(
-                        client,
-                        interaction.guildId,
-                        interaction.user.id
-                    );
-
+            if (
+                result.result === 'failed'
+            ) {
                 const embed =
                     buildFruitGardenEmbed(
                         interaction.user,
                         result.garden,
-                        'cashed_out'
+                        'failed'
                     );
 
-                /*
-                |--------------------------------------------------------------------------
-                | Update the game message and remove the buttons.
-                |--------------------------------------------------------------------------
-                */
-
                 await interaction.message.edit({
-                    embeds: [embed],
+                    embeds: [
+                        embed,
+                    ],
                     components: [],
                 });
 
@@ -206,22 +95,155 @@ export default [
                     interaction,
                     {
                         content:
-                            `💰 You cashed out **$${result.payout.toLocaleString()}**! Your new balance is **$${result.wallet.toLocaleString()}**.`,
+                            '💥 Your Fruit Garden failed.',
                     }
                 );
 
-            } catch (error) {
-                await handleInteractionError(
+                return;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Successful Plant
+            |--------------------------------------------------------------------------
+            */
+
+            const embed =
+                buildFruitGardenEmbed(
+                    interaction.user,
+                    result.garden,
+                    'success'
+                );
+
+            const components =
+                buildFruitGardenComponents(
+                    result.garden
+                );
+
+            await interaction.message.edit({
+                embeds: [
+                    embed,
+                ],
+                components,
+            });
+
+            await InteractionHelper.safeEditReply(
+                interaction,
+                {
+                    content:
+                        `🌱 Your garden grew! Current cash out: **$${Number(result.garden.currentPayout || 0).toLocaleString()}**.`,
+                }
+            );
+
+        } catch (error) {
+            await handleInteractionError(
+                interaction,
+                error,
+                {
+                    type: 'button',
+                    handler: 'fg_grow',
+                    customId:
+                        interaction.customId,
+                }
+            );
+        }
+    },
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Cash Out Button
+|--------------------------------------------------------------------------
+*/
+
+const cashOutFruitGardenButton = {
+    name: 'fg_cashout',
+
+    async execute(
+        interaction,
+        client
+    ) {
+        try {
+            if (!interaction.guildId) {
+                await InteractionHelper.safeReply(
                     interaction,
-                    error,
                     {
-                        type: 'button',
-                        handler: 'fg_cashout',
-                        customId:
-                            interaction.customId,
+                        content:
+                            'Fruit Garden can only be used inside a server.',
+                        flags:
+                            MessageFlags.Ephemeral,
                     }
                 );
+
+                return;
             }
-        },
+
+            const deferred =
+                await InteractionHelper.safeDefer(
+                    interaction,
+                    {
+                        flags:
+                            MessageFlags.Ephemeral,
+                    }
+                );
+
+            if (!deferred) {
+                return;
+            }
+
+            const result =
+                await cashOutFruitGarden(
+                    client,
+                    interaction.guildId,
+                    interaction.user.id
+                );
+
+            const embed =
+                buildFruitGardenEmbed(
+                    interaction.user,
+                    result.garden,
+                    'cashed_out'
+                );
+
+            await interaction.message.edit({
+                embeds: [
+                    embed,
+                ],
+                components: [],
+            });
+
+            await InteractionHelper.safeEditReply(
+                interaction,
+                {
+                    content:
+                        `💰 You cashed out **$${result.payout.toLocaleString()}**! Your new wallet balance is **$${result.wallet.toLocaleString()}**.`,
+                }
+            );
+
+        } catch (error) {
+            await handleInteractionError(
+                interaction,
+                error,
+                {
+                    type: 'button',
+                    handler: 'fg_cashout',
+                    customId:
+                        interaction.customId,
+                }
+            );
+        }
     },
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Export
+|--------------------------------------------------------------------------
+*/
+
+export default [
+    growFruitGardenButton,
+    cashOutFruitGardenButton,
 ];
