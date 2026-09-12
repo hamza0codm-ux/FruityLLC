@@ -5,7 +5,11 @@ import {
 } from 'discord.js';
 
 import { createEmbed } from '../../utils/embeds.js';
-import { getEconomyData, setEconomyData } from '../../utils/economy.js';
+import {
+    getEconomyData,
+    setEconomyData,
+} from '../../utils/economy.js';
+
 import { logger } from '../../utils/logger.js';
 
 const DEFAULT_BET = 100;
@@ -85,16 +89,23 @@ const FRUITS = [
 ];
 
 function getFruit(key) {
-    return FRUITS.find((fruit) => fruit.key === key) || null;
+    return (
+        FRUITS.find(
+            (fruit) => fruit.key === key,
+        ) || null
+    );
 }
 
 function chooseFruit() {
-    const totalWeight = FRUITS.reduce(
-        (total, fruit) => total + fruit.weight,
-        0,
-    );
+    const totalWeight =
+        FRUITS.reduce(
+            (total, fruit) =>
+                total + fruit.weight,
+            0,
+        );
 
-    let random = Math.random() * totalWeight;
+    let random =
+        Math.random() * totalWeight;
 
     for (const fruit of FRUITS) {
         random -= fruit.weight;
@@ -115,18 +126,26 @@ function formatMultiplier(value) {
     return `${Number(value || 1).toFixed(2)}x`;
 }
 
-function createGardenButtons(guildId, userId, disabled = false) {
+function createGardenButtons(
+    guildId,
+    userId,
+    disabled = false,
+) {
     return [
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`fg_plant:${guildId}:${userId}`)
+                .setCustomId(
+                    `fg_plant:${guildId}:${userId}`,
+                )
                 .setLabel('Plant')
                 .setEmoji('🌱')
                 .setStyle(ButtonStyle.Success)
                 .setDisabled(disabled),
 
             new ButtonBuilder()
-                .setCustomId(`fg_cashout:${guildId}:${userId}`)
+                .setCustomId(
+                    `fg_cashout:${guildId}:${userId}`,
+                )
                 .setLabel('Cash Out')
                 .setEmoji('💰')
                 .setStyle(ButtonStyle.Primary)
@@ -136,59 +155,101 @@ function createGardenButtons(guildId, userId, disabled = false) {
 }
 
 function createGardenDisplay(garden) {
-    const slots = Array.isArray(garden.garden)
-        ? garden.garden
-        : [];
+    const slots =
+        Array.isArray(garden.garden)
+            ? garden.garden
+            : [];
 
     const display = [];
 
     for (let i = 0; i < 10; i += 1) {
-        const fruitKey = slots[i];
+        const fruitKey =
+            slots[i] || null;
 
-        if (fruitKey) {
-            const fruit = getFruit(fruitKey);
-
-            display.push(
-                fruit
-                    ? `${fruit.emoji}`
-                    : '🌱',
-            );
-        } else {
+        if (!fruitKey) {
             display.push('🌱');
+            continue;
         }
+
+        const fruit =
+            getFruit(
+                typeof fruitKey === 'string'
+                    ? fruitKey
+                    : fruitKey.key,
+            );
+
+        display.push(
+            fruit?.emoji || '🌱',
+        );
     }
 
     return [
-        display.slice(0, 5).join(' '),
-        display.slice(5, 10).join(' '),
+        display
+            .slice(0, 5)
+            .join(' '),
+
+        display
+            .slice(5, 10)
+            .join(' '),
     ].join('\n');
 }
 
 function getNextReward(garden) {
-    const multiplier = Number(garden.current_multiplier || 1);
-    const bet = Number(garden.bet || DEFAULT_BET);
+    const multiplier =
+        Number(
+            garden.current_multiplier ||
+            STARTING_MULTIPLIER,
+        );
+
+    const bet =
+        Number(
+            garden.bet ||
+            DEFAULT_BET,
+        );
 
     return Math.max(
-        0,
-        Math.floor(bet * multiplier),
+        1,
+        Math.floor(
+            bet * (
+                multiplier +
+                MULTIPLIER_INCREASE
+            ),
+        ),
     );
 }
 
-function createGardenEmbed(interaction, garden, result = null) {
+function createGardenEmbed(
+    interaction,
+    garden,
+    result = null,
+) {
     const username =
         interaction.member?.displayName ||
         interaction.user?.globalName ||
         interaction.user?.username ||
         'User';
 
-    const failureChance = Number(garden.failure_chance || INITIAL_FAILURE_CHANCE);
-    const multiplier = Number(garden.current_multiplier || STARTING_MULTIPLIER);
-    const nextMultiplier = multiplier + MULTIPLIER_INCREASE;
+    const failureChance =
+        Number(
+            garden.failure_chance ||
+            INITIAL_FAILURE_CHANCE,
+        );
 
-    const nextReward = getNextReward(garden);
+    const multiplier =
+        Number(
+            garden.current_multiplier ||
+            STARTING_MULTIPLIER,
+        );
+
+    const nextMultiplier =
+        multiplier +
+        MULTIPLIER_INCREASE;
+
+    const nextReward =
+        getNextReward(garden);
 
     let description = [
-        `🌱 **Your fruit garden is growing!**`,
+        '🌱 **Your fruit garden is growing!**',
         '',
         createGardenDisplay(garden),
     ].join('\n');
@@ -213,13 +274,18 @@ function createGardenEmbed(interaction, garden, result = null) {
     if (garden.status === 'cashed_out') {
         description += [
             '',
-            `💰 **You cashed out ${formatNumber(garden.cash_out)}!**`,
+            `💰 **You cashed out ${formatNumber(
+                garden.cash_out,
+            )}!**`,
         ].join('\n');
     }
 
     return createEmbed({
-        title: `🍓 ${username}'s fruit garden is growing!`,
+        title:
+            `🍓 ${username}'s fruit garden is growing!`,
+
         description,
+
         color:
             garden.status === 'failed'
                 ? '#ED4245'
@@ -229,110 +295,177 @@ function createGardenEmbed(interaction, garden, result = null) {
     }).addFields(
         {
             name: '💵 Bet',
-            value: `\`${formatNumber(garden.bet)}\``,
+            value:
+                `\`${formatNumber(
+                    garden.bet,
+                )}\``,
             inline: true,
         },
+
         {
             name: '🌱 Steps',
-            value: `\`${garden.steps}\``,
+            value:
+                `\`${formatNumber(
+                    garden.steps,
+                )}\``,
             inline: true,
         },
+
         {
             name: '💀 Failure Chance',
-            value: `\`${failureChance.toFixed(1)}%\``,
+            value:
+                `\`${failureChance.toFixed(
+                    1,
+                )}%\``,
             inline: true,
         },
+
         {
             name: '💰 Cash Out',
-            value: `\`${formatNumber(garden.cash_out)}\``,
+            value:
+                `\`${formatNumber(
+                    garden.cash_out,
+                )}\``,
             inline: true,
         },
+
         {
             name: '📈 Multiplier',
-            value: `\`${formatMultiplier(multiplier)}\``,
+            value:
+                `\`${formatMultiplier(
+                    multiplier,
+                )}\``,
             inline: true,
         },
+
         {
             name: '🌿 Next Reward',
-            value: `\`${formatNumber(nextReward)}\``,
+            value:
+                `\`${formatNumber(
+                    nextReward,
+                )}\``,
             inline: true,
         },
+
         {
             name: '📈 Next Multiplier',
-            value: `\`${formatMultiplier(nextMultiplier)}\``,
+            value:
+                `\`${formatMultiplier(
+                    nextMultiplier,
+                )}\``,
             inline: true,
         },
+
         {
             name: '🍓 Growing Fruit',
-            value: garden.planted_fruit
-                ? `${getFruit(garden.planted_fruit)?.emoji || '🌱'} ${getFruit(garden.planted_fruit)?.name || garden.planted_fruit}`
-                : '🌱 Nothing yet',
+            value:
+                garden.planted_fruit
+                    ? `${
+                        getFruit(
+                            garden.planted_fruit,
+                        )?.emoji || '🌱'
+                    } ${
+                        getFruit(
+                            garden.planted_fruit,
+                        )?.name ||
+                        garden.planted_fruit
+                    }`
+                    : '🌱 Nothing yet',
+
             inline: true,
         },
     );
 }
 
-async function getGarden(client, guildId, userId, forUpdate = false, dbClient = null) {
-    const executor = dbClient || client.db.pool;
+async function getGarden(
+    client,
+    guildId,
+    userId,
+    forUpdate = false,
+    dbClient = null,
+) {
+    const executor =
+        dbClient ||
+        client.db.pool;
 
-    const query = `
-        SELECT
-            guild_id,
-            user_id,
-            bet,
-            steps,
-            current_multiplier,
-            cash_out,
-            failure_chance,
-            status,
-            garden,
-            planted_fruit,
-            started_at,
-            updated_at,
-            completed_at
-        FROM fruit_gardens
-        WHERE guild_id = $1
-          AND user_id = $2
-        ${forUpdate ? 'FOR UPDATE' : ''}
-    `;
-
-    const result = await executor.query(query, [
-        guildId,
-        userId,
-    ]);
+    const result =
+        await executor.query(
+            `
+            SELECT
+                guild_id,
+                user_id,
+                bet,
+                steps,
+                current_multiplier,
+                cash_out,
+                failure_chance,
+                status,
+                garden,
+                planted_fruit,
+                started_at,
+                updated_at,
+                completed_at
+            FROM fruit_gardens
+            WHERE guild_id = $1
+              AND user_id = $2
+            ${forUpdate ? 'FOR UPDATE' : ''}
+            `,
+            [
+                guildId,
+                userId,
+            ],
+        );
 
     return result.rows[0] || null;
 }
 
-async function saveGarden(dbClient, garden) {
-    await dbClient.query(
-        `
-        UPDATE fruit_gardens
-        SET
-            steps = $3,
-            current_multiplier = $4,
-            cash_out = $5,
-            failure_chance = $6,
-            status = $7,
-            garden = $8::jsonb,
-            planted_fruit = $9,
-            completed_at = $10
-        WHERE guild_id = $1
-          AND user_id = $2
-        `,
-        [
-            garden.guild_id,
-            garden.user_id,
-            garden.steps,
-            garden.current_multiplier,
-            garden.cash_out,
-            garden.failure_chance,
-            garden.status,
-            JSON.stringify(garden.garden || []),
-            garden.planted_fruit,
-            garden.completed_at || null,
-        ],
-    );
+async function saveGarden(
+    dbClient,
+    garden,
+) {
+    const result =
+        await dbClient.query(
+            `
+            UPDATE fruit_gardens
+            SET
+                steps = $3,
+                current_multiplier = $4,
+                cash_out = $5,
+                failure_chance = $6,
+                status = $7,
+                garden = $8::jsonb,
+                planted_fruit = $9,
+                updated_at = CURRENT_TIMESTAMP,
+                completed_at = CASE
+                    WHEN $7 IN (
+                        'failed',
+                        'cashed_out',
+                        'completed'
+                    )
+                        THEN CURRENT_TIMESTAMP
+                    ELSE completed_at
+                END
+            WHERE guild_id = $1
+              AND user_id = $2
+            RETURNING *
+            `,
+            [
+                garden.guild_id,
+                garden.user_id,
+                garden.steps,
+                garden.current_multiplier,
+                garden.cash_out,
+                garden.failure_chance,
+                garden.status,
+                JSON.stringify(
+                    garden.garden || [],
+                ),
+                garden.planted_fruit ||
+                    null,
+            ],
+        );
+
+    return result.rows[0] || null;
 }
 
 async function addFruitToInventory(
@@ -350,9 +483,16 @@ async function addFruitToInventory(
             quantity
         )
         VALUES ($1, $2, $3, 1)
-        ON CONFLICT (guild_id, user_id, fruit_key)
+        ON CONFLICT (
+            guild_id,
+            user_id,
+            fruit_key
+        )
         DO UPDATE SET
-            quantity = fruit_garden_inventory.quantity + 1
+            quantity =
+                fruit_garden_inventory.quantity + 1,
+            updated_at =
+                CURRENT_TIMESTAMP
         `,
         [
             guildId,
@@ -362,25 +502,37 @@ async function addFruitToInventory(
     );
 }
 
-async function plantFruit(interaction, client, guildId, userId) {
-    const dbClient = await client.db.pool.connect();
+async function plantFruit(
+    interaction,
+    client,
+    guildId,
+    userId,
+) {
+    const dbClient =
+        await client.db.pool.connect();
 
     try {
-        await dbClient.query('BEGIN');
-
-        const garden = await getGarden(
-            client,
-            guildId,
-            userId,
-            true,
-            dbClient,
+        await dbClient.query(
+            'BEGIN',
         );
 
+        const garden =
+            await getGarden(
+                client,
+                guildId,
+                userId,
+                true,
+                dbClient,
+            );
+
         if (!garden) {
-            await dbClient.query('ROLLBACK');
+            await dbClient.query(
+                'ROLLBACK',
+            );
 
             await interaction.reply({
-                content: '❌ You do not have an active fruit garden.',
+                content:
+                    '❌ You do not have a Fruity Garden.',
                 ephemeral: true,
             });
 
@@ -388,59 +540,83 @@ async function plantFruit(interaction, client, guildId, userId) {
         }
 
         if (garden.status !== 'active') {
-            await dbClient.query('ROLLBACK');
+            await dbClient.query(
+                'ROLLBACK',
+            );
 
             await interaction.reply({
-                content: '❌ This fruit garden is no longer active.',
+                content:
+                    '❌ This Fruity Garden is no longer active.',
                 ephemeral: true,
             });
 
             return;
         }
 
-        const failureChance = Number(
-            garden.failure_chance || INITIAL_FAILURE_CHANCE,
-        );
+        const failureChance =
+            Number(
+                garden.failure_chance ||
+                INITIAL_FAILURE_CHANCE,
+            );
 
-        const failed = Math.random() * 100 < failureChance;
+        const failed =
+            Math.random() * 100 <
+            failureChance;
 
         if (failed) {
-            garden.status = 'failed';
-            garden.completed_at = new Date();
+            garden.status =
+                'failed';
 
-            await saveGarden(dbClient, garden);
+            garden.planted_fruit =
+                null;
 
-            await dbClient.query('COMMIT');
+            const saved =
+                await saveGarden(
+                    dbClient,
+                    garden,
+                );
 
-            const embed = createGardenEmbed(
-                interaction,
-                garden,
-                {
-                    failed: true,
-                },
+            await dbClient.query(
+                'COMMIT',
             );
 
             await interaction.update({
-                embeds: [embed],
-                components: createGardenButtons(
-                    guildId,
-                    userId,
-                    true,
-                ),
+                embeds: [
+                    createGardenEmbed(
+                        interaction,
+                        saved,
+                        {
+                            failed: true,
+                        },
+                    ),
+                ],
+
+                components:
+                    createGardenButtons(
+                        guildId,
+                        userId,
+                        true,
+                    ),
             });
 
             return;
         }
 
-        const fruit = chooseFruit();
+        const fruit =
+            chooseFruit();
 
         garden.steps =
-            Number(garden.steps || 0) + 1;
+            Number(
+                garden.steps || 0,
+            ) + 1;
 
         garden.current_multiplier =
             Number(
                 (
-                    Number(garden.current_multiplier || STARTING_MULTIPLIER) +
+                    Number(
+                        garden.current_multiplier ||
+                        STARTING_MULTIPLIER,
+                    ) +
                     MULTIPLIER_INCREASE
                 ).toFixed(4),
             );
@@ -456,27 +632,45 @@ async function plantFruit(interaction, client, guildId, userId) {
                 ),
             );
 
-        garden.planted_fruit = fruit.key;
+        garden.planted_fruit =
+            fruit.key;
 
-        const reward = Math.max(
-            Number(fruit.value || 0),
-            Math.floor(
-                Number(garden.bet || DEFAULT_BET) *
-                Number(garden.current_multiplier || 1),
-            ),
-        );
+        const reward =
+            Math.max(
+                Number(
+                    fruit.value || 0,
+                ),
+
+                Math.floor(
+                    Number(
+                        garden.bet ||
+                        DEFAULT_BET,
+                    ) *
+                    Number(
+                        garden.current_multiplier ||
+                        1,
+                    ),
+                ),
+            );
 
         garden.cash_out =
-            Number(garden.cash_out || 0) +
-            reward;
+            Number(
+                garden.cash_out || 0,
+            ) + reward;
 
-        const currentGarden = Array.isArray(garden.garden)
-            ? garden.garden
-            : [];
+        const currentGarden =
+            Array.isArray(
+                garden.garden,
+            )
+                ? garden.garden
+                : [];
 
-        currentGarden.push(fruit.key);
+        currentGarden.push(
+            fruit.key,
+        );
 
-        garden.garden = currentGarden.slice(-10);
+        garden.garden =
+            currentGarden.slice(-10);
 
         await addFruitToInventory(
             dbClient,
@@ -485,44 +679,59 @@ async function plantFruit(interaction, client, guildId, userId) {
             fruit.key,
         );
 
-        await saveGarden(dbClient, garden);
+        const saved =
+            await saveGarden(
+                dbClient,
+                garden,
+            );
 
-        await dbClient.query('COMMIT');
-
-        const embed = createGardenEmbed(
-            interaction,
-            garden,
-            {
-                success: true,
-                fruit,
-                reward,
-            },
+        await dbClient.query(
+            'COMMIT',
         );
 
         await interaction.update({
-            embeds: [embed],
-            components: createGardenButtons(
-                guildId,
-                userId,
-                false,
-            ),
+            embeds: [
+                createGardenEmbed(
+                    interaction,
+                    saved,
+                    {
+                        success: true,
+                        fruit,
+                        reward,
+                    },
+                ),
+            ],
+
+            components:
+                createGardenButtons(
+                    guildId,
+                    userId,
+                    false,
+                ),
         });
     } catch (error) {
-        await dbClient.query('ROLLBACK').catch(() => {});
+        await dbClient.query(
+            'ROLLBACK',
+        ).catch(() => {});
 
         logger.error(
-            `Error planting fruit for ${userId}:`,
+            `[FRUITY GARDEN] Plant failed for ${userId}:`,
             error,
         );
 
-        if (!interaction.replied && !interaction.deferred) {
+        if (
+            !interaction.replied &&
+            !interaction.deferred
+        ) {
             await interaction.reply({
-                content: '❌ Something went wrong while planting your fruit.',
+                content:
+                    '❌ Something went wrong while planting your fruit.',
                 ephemeral: true,
             }).catch(() => {});
         } else {
             await interaction.followUp({
-                content: '❌ Something went wrong while planting your fruit.',
+                content:
+                    '❌ Something went wrong while planting your fruit.',
                 ephemeral: true,
             }).catch(() => {});
         }
@@ -531,25 +740,37 @@ async function plantFruit(interaction, client, guildId, userId) {
     }
 }
 
-async function cashOutGarden(interaction, client, guildId, userId) {
-    const dbClient = await client.db.pool.connect();
+async function cashOutGarden(
+    interaction,
+    client,
+    guildId,
+    userId,
+) {
+    const dbClient =
+        await client.db.pool.connect();
 
     try {
-        await dbClient.query('BEGIN');
-
-        const garden = await getGarden(
-            client,
-            guildId,
-            userId,
-            true,
-            dbClient,
+        await dbClient.query(
+            'BEGIN',
         );
 
+        const garden =
+            await getGarden(
+                client,
+                guildId,
+                userId,
+                true,
+                dbClient,
+            );
+
         if (!garden) {
-            await dbClient.query('ROLLBACK');
+            await dbClient.query(
+                'ROLLBACK',
+            );
 
             await interaction.reply({
-                content: '❌ You do not have an active fruit garden.',
+                content:
+                    '❌ You do not have a Fruity Garden.',
                 ephemeral: true,
             });
 
@@ -557,99 +778,131 @@ async function cashOutGarden(interaction, client, guildId, userId) {
         }
 
         if (garden.status !== 'active') {
-            await dbClient.query('ROLLBACK');
+            await dbClient.query(
+                'ROLLBACK',
+            );
 
             await interaction.reply({
-                content: '❌ This fruit garden has already been finished.',
+                content:
+                    '❌ This Fruity Garden has already been finished.',
                 ephemeral: true,
             });
 
             return;
         }
 
-        const amount = Math.max(
-            0,
-            Number(garden.cash_out || 0),
-        );
+        const amount =
+            Math.max(
+                0,
+                Number(
+                    garden.cash_out || 0,
+                ),
+            );
 
         if (amount <= 0) {
-            await dbClient.query('ROLLBACK');
+            await dbClient.query(
+                'ROLLBACK',
+            );
 
             await interaction.reply({
-                content: '❌ There is nothing to cash out yet. Plant some fruit first!',
+                content:
+                    '❌ There is nothing to cash out yet. Plant some fruit first!',
                 ephemeral: true,
             });
 
             return;
         }
 
-        const economyData = await getEconomyData(
-            client,
-            guildId,
-            userId,
-        );
+        const economy =
+            await getEconomyData(
+                client,
+                guildId,
+                userId,
+            );
 
-        const oldWallet = Number(economyData.wallet || 0);
+        economy.wallet =
+            Number(
+                economy.wallet || 0,
+            ) + amount;
 
-        economyData.wallet =
-            oldWallet + amount;
+        const savedEconomy =
+            await setEconomyData(
+                client,
+                guildId,
+                userId,
+                economy,
+            );
 
-        const saved = await setEconomyData(
-            client,
-            guildId,
-            userId,
-            economyData,
-        );
-
-        if (!saved) {
+        if (!savedEconomy) {
             throw new Error(
-                'Failed to save economy data during fruit garden cash out.',
+                'Failed to save wallet during Fruity Garden cash out.',
             );
         }
 
-        garden.status = 'cashed_out';
-        garden.completed_at = new Date();
+        garden.status =
+            'cashed_out';
 
-        await saveGarden(
-            dbClient,
-            garden,
+        garden.completed_at =
+            new Date();
+
+        const savedGarden =
+            await saveGarden(
+                dbClient,
+                garden,
+            );
+
+        await dbClient.query(
+            'COMMIT',
         );
 
-        await dbClient.query('COMMIT');
+        const embed =
+            createGardenEmbed(
+                interaction,
+                savedGarden,
+            );
 
-        const embed = createGardenEmbed(
-            interaction,
-            garden,
-        ).addFields({
+        embed.addFields({
             name: '💵 New Balance',
-            value: `\`${formatNumber(economyData.wallet)}\``,
+            value:
+                `\`${formatNumber(
+                    economy.wallet,
+                )}\``,
             inline: true,
         });
 
         await interaction.update({
             embeds: [embed],
-            components: createGardenButtons(
-                guildId,
-                userId,
-                true,
-            ),
+
+            components:
+                createGardenButtons(
+                    guildId,
+                    userId,
+                    true,
+                ),
         });
     } catch (error) {
-        await dbClient.query('ROLLBACK').catch(() => {});
+        await dbClient.query(
+            'ROLLBACK',
+        ).catch(() => {});
 
         logger.error(
-            `Error cashing out fruit garden for ${userId}:`,
+            `[FRUITY GARDEN] Cash out failed for ${userId}:`,
             error,
         );
 
-        if (!interaction.replied && !interaction.deferred) {
+        if (
+            !interaction.replied &&
+            !interaction.deferred
+        ) {
             await interaction.reply({
-                content: '❌ Something went wrong while cashing out your garden.',
+                content:
+                    '❌ Something went wrong while cashing out your garden.',
                 ephemeral: true,
             }).catch(() => {});
         } else {
             await interaction.followUp({
-                content: '❌ Something went wrong while cashing out your garden.',
+                content:
+                    '❌ Something went wrong while cashing out your garden.',
                 ephemeral: true,
             }).catch(() => {});
         }
@@ -658,33 +911,56 @@ async function cashOutGarden(interaction, client, guildId, userId) {
     }
 }
 
-function createHandler(name, handler) {
+function createHandler(
+    name,
+    handler,
+) {
     return {
         name,
-        async execute(interaction, client, args = []) {
-            const [guildId, userId] = args;
 
-            if (!guildId || !userId) {
+        async execute(
+            interaction,
+            client,
+            args = [],
+        ) {
+            const [
+                guildId,
+                userId,
+            ] = args;
+
+            if (
+                !guildId ||
+                !userId
+            ) {
                 await interaction.reply({
-                    content: '❌ Invalid fruit garden button.',
+                    content:
+                        '❌ Invalid Fruity Garden button.',
                     ephemeral: true,
                 }).catch(() => {});
 
                 return;
             }
 
-            if (interaction.guildId !== guildId) {
+            if (
+                interaction.guildId !==
+                guildId
+            ) {
                 await interaction.reply({
-                    content: '❌ This fruit garden belongs to another server.',
+                    content:
+                        '❌ This garden belongs to another server.',
                     ephemeral: true,
                 }).catch(() => {});
 
                 return;
             }
 
-            if (interaction.user.id !== userId) {
+            if (
+                interaction.user.id !==
+                userId
+            ) {
                 await interaction.reply({
-                    content: '❌ This is not your fruit garden.',
+                    content:
+                        '❌ This is not your Fruity Garden.',
                     ephemeral: true,
                 }).catch(() => {});
 
