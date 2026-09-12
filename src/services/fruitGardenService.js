@@ -20,15 +20,15 @@ import {
 
 /*
 |--------------------------------------------------------------------------
-| Fruit Garden Configuration
+| Fruit Garden Settings
 |--------------------------------------------------------------------------
 */
 
-const STARTING_FAILURE_CHANCE = 0.20;
+const MAX_STEPS = 10;
 
-const PAYOUT_MULTIPLIER = 1.25;
+const FAILURE_CHANCE = 0.20;
 
-const MAX_STEPS = 50;
+const GROWTH_MULTIPLIER = 1.17;
 
 const MIN_BET = 1;
 
@@ -38,8 +38,8 @@ const MIN_BET = 1;
 | Fruits
 |--------------------------------------------------------------------------
 |
-| These are primarily visual, so each successful step makes the garden
-| change as the player progresses.
+| The garden ALWAYS has exactly 3 rows.
+| Each row contains exactly 5 fruit slots.
 |--------------------------------------------------------------------------
 */
 
@@ -61,41 +61,18 @@ const FRUITS = [
     '🥥',
 ];
 
-const RARE_FRUITS = [
-    '🍍',
-    '🥭',
-    '🍒',
-    '🍉',
-    '🍓',
-];
-
-const LEGENDARY_FRUITS = [
-    '🍇',
-    '🍍',
-    '🥭',
-];
-
 
 /*
 |--------------------------------------------------------------------------
-| Active Game Locks
-|--------------------------------------------------------------------------
-|
-| Prevents two button clicks arriving at nearly the same time from
-| processing the same garden twice.
+| Locks
 |--------------------------------------------------------------------------
 */
 
-const gardenLocks = new Set();
+const gardenLocks =
+    new Set();
 
 
-/*
-|--------------------------------------------------------------------------
-| Helpers
-|--------------------------------------------------------------------------
-*/
-
-function getGardenLockKey(
+function getLockKey(
     guildId,
     userId
 ) {
@@ -103,21 +80,21 @@ function getGardenLockKey(
 }
 
 
-function withGardenLock(
+function acquireLock(
     guildId,
     userId
 ) {
     const key =
-        getGardenLockKey(
+        getLockKey(
             guildId,
             userId
         );
 
     if (gardenLocks.has(key)) {
         throw createError(
-            'Fruit Garden action already processing',
+            'Fruit Garden busy',
             ErrorTypes.RATE_LIMIT,
-            'Your Fruit Garden action is already being processed. Please wait a moment.'
+            'Your Fruit Garden is already processing an action. Please wait a moment.'
         );
     }
 
@@ -129,319 +106,131 @@ function withGardenLock(
 }
 
 
-function randomFruit() {
-    const random =
-        Math.random();
+/*
+|--------------------------------------------------------------------------
+| Formatting
+|--------------------------------------------------------------------------
+*/
 
-    if (random < 0.03) {
-        return LEGENDARY_FRUITS[
-            Math.floor(
-                Math.random() *
-                LEGENDARY_FRUITS.length
-            )
-        ];
-    }
-
-    if (random < 0.12) {
-        return RARE_FRUITS[
-            Math.floor(
-                Math.random() *
-                RARE_FRUITS.length
-            )
-        ];
-    }
-
-    return FRUITS[
-        Math.floor(
-            Math.random() *
-            FRUITS.length
-        )
-    ];
-}
-
-
-function createGardenDisplay(
-    steps
-) {
-    const fruitCount =
-        Math.min(
-            15,
-            Math.max(
-                5,
-                5 + Math.floor(steps / 2)
-            )
-        );
-
-    const fruits = [];
-
-    for (
-        let index = 0;
-        index < fruitCount;
-        index += 1
-    ) {
-        fruits.push(
-            randomFruit()
-        );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Always keep the display visually consistent.
-    |--------------------------------------------------------------------------
-    */
-
-    while (fruits.length < 15) {
-        fruits.push('🌱');
-    }
-
-    return [
-        fruits.slice(0, 5).join(' '),
-        fruits.slice(5, 10).join(' '),
-        fruits.slice(10, 15).join(' '),
-    ].join('\n');
-}
-
-
-function calculateNextPayout(
-    currentPayout
-) {
-    return Math.floor(
-        currentPayout *
-        PAYOUT_MULTIPLIER
-    );
-}
-
-
-function formatCurrency(
+function formatMoney(
     amount
 ) {
-    return `$${Number(amount || 0).toLocaleString()}`;
+    return `$${Math.floor(
+        Number(amount || 0)
+    ).toLocaleString()}`;
 }
 
 
 function formatPercent(
     value
 ) {
-    return `${Math.round(value * 100)}%`;
+    return `${(
+        Number(value || 0) *
+        100
+    ).toFixed(2)}%`;
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| Build Embed
-|--------------------------------------------------------------------------
-*/
-
-export function buildFruitGardenEmbed(
-    user,
-    garden,
-    result = null
+function calculateNextPayout(
+    bet,
+    steps
 ) {
-    const payout =
-        Number(
-            garden?.payout || 0
-        );
-
-    const bet =
-        Number(
-            garden?.bet || 0
-        );
-
-    const steps =
-        Number(
-            garden?.steps || 0
-        );
-
-    const failureChance =
-        Number(
-            garden?.failureChance ??
-            STARTING_FAILURE_CHANCE
-        );
-
-    const nextPayout =
-        calculateNextPayout(
-            payout
-        );
-
-    const display =
-        garden?.display ||
-        createGardenDisplay(
-            steps
-        );
-
-    let title =
-        `🍓 ${user.username}'s Fruit Garden`;
-
-    let description =
-        '';
-
-    let color =
-        0xF8D568;
-
-    if (result === 'success') {
-        title =
-            `🌱 ${user.username}'s Fruit Garden`;
-
-        description =
-            'Your garden survived another growth stage!\n' +
-            'Keep planting for a bigger payout — or cash out before the garden fails.';
-    }
-
-    if (result === 'cashed_out') {
-        title =
-            `💰 ${user.username}'s Fruit Garden`;
-
-        description =
-            `You cashed out your Fruit Garden for **${formatCurrency(payout)}**!`;
-
-        color =
-            0x57F287;
-    }
-
-    if (result === 'failed') {
-        title =
-            `💥 ${user.username}'s Fruit Garden`;
-
-        description =
-            `The garden failed and your **${formatCurrency(bet)}** bet was lost.`;
-
-        color =
-            0xED4245;
-    }
-
-    if (!result) {
-        description =
-            'Plant your garden and see how far you can grow the payout.';
-    }
-
-    const embed =
-        new EmbedBuilder()
-            .setColor(color)
-            .setTitle(title)
-            .setDescription(
-                `${description}\n\n` +
-                `**Bet:** ${formatCurrency(bet)}\n` +
-                `**Steps:** ${steps}\n` +
-                `**Failure Chance:** ${formatPercent(failureChance)}\n\n` +
-                `**Cash Out:** ${formatCurrency(payout)}\n` +
-                `**Next:** ${formatCurrency(nextPayout)}\n\n` +
-                `${display}`
-            );
-
-    if (result === 'success') {
-        const increase =
-            nextPayout -
-            payout;
-
-        embed.addFields({
-            name: '🌱 Next Plant',
-            value:
-                `Potential increase: **+${formatCurrency(increase)}**`,
-            inline: false,
-        });
-    }
-
-    if (result === 'cashed_out') {
-        embed.addFields({
-            name: '💵 Winnings',
-            value:
-                formatCurrency(payout),
-            inline: true,
-        });
-    }
-
-    if (result === 'failed') {
-        embed.addFields({
-            name: '💸 Lost',
-            value:
-                formatCurrency(bet),
-            inline: true,
-        });
-    }
-
-    embed.setFooter({
-        text:
-            result === 'cashed_out'
-                ? 'Fruit Garden • Payout added to your wallet'
-                : result === 'failed'
-                    ? 'Fruit Garden • Better luck next time!'
-                    : 'Fruit Garden • Risk more for a bigger payout',
-    });
-
-    return embed;
+    return Math.floor(
+        Number(bet || 0) *
+        Math.pow(
+            GROWTH_MULTIPLIER,
+            Number(steps || 0) + 1
+        )
+    );
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| Build Components
-|--------------------------------------------------------------------------
-*/
-
-export function buildFruitGardenComponents(
-    garden,
-    disabled = false
+function calculateCurrentPayout(
+    bet,
+    steps
 ) {
     if (
-        !garden?.active ||
-        disabled
+        Number(steps || 0) <= 0
     ) {
-        return [];
+        return 0;
     }
 
-    const payout =
-        Number(
-            garden.payout || 0
-        );
-
-    const nextPayout =
-        calculateNextPayout(
-            payout
-        );
-
-    const increase =
-        nextPayout -
-        payout;
-
-    const plantButton =
-        new ButtonBuilder()
-            .setCustomId(
-                'fg_grow'
-            )
-            .setLabel(
-                `Plant (+${increase.toLocaleString()})`
-            )
-            .setEmoji('🌱')
-            .setStyle(
-                ButtonStyle.Primary
-            );
-
-    const cashOutButton =
-        new ButtonBuilder()
-            .setCustomId(
-                'fg_cashout'
-            )
-            .setLabel(
-                `Cash Out ${payout.toLocaleString()}`
-            )
-            .setEmoji('💰')
-            .setStyle(
-                ButtonStyle.Success
-            );
-
-    return [
-        new ActionRowBuilder()
-            .addComponents(
-                plantButton,
-                cashOutButton
-            ),
-    ];
+    return Math.floor(
+        Number(bet || 0) *
+        Math.pow(
+            GROWTH_MULTIPLIER,
+            Number(steps || 0)
+        )
+    );
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| Start Fruit Garden
+| Garden Visual
+|--------------------------------------------------------------------------
+|
+| EXACTLY 3 lines.
+| Exactly 5 slots on each line.
+|
+|--------------------------------------------------------------------------
+*/
+
+function generateGardenDisplay(
+    steps = 0
+) {
+    const planted =
+        Math.min(
+            Math.max(
+                Number(steps || 0),
+                0
+            ),
+            15
+        );
+
+    const slots = [];
+
+    for (
+        let index = 0;
+        index < 15;
+        index += 1
+    ) {
+        if (index < planted) {
+            const fruit =
+                FRUITS[
+                    Math.floor(
+                        Math.random() *
+                        FRUITS.length
+                    )
+                ];
+
+            slots.push(
+                fruit
+            );
+        } else {
+            slots.push(
+                '🌱'
+            );
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Always return exactly 3 rows of 5.
+    |--------------------------------------------------------------------------
+    */
+
+    return [
+        slots.slice(0, 5).join(' '),
+        slots.slice(5, 10).join(' '),
+        slots.slice(10, 15).join(' '),
+    ].join('\n');
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Start Garden
 |--------------------------------------------------------------------------
 */
 
@@ -460,12 +249,12 @@ export async function startFruitGarden(
         throw createError(
             'Invalid Fruit Garden bet',
             ErrorTypes.VALIDATION,
-            `Your Fruit Garden bet must be at least **${formatCurrency(MIN_BET)}**.`
+            'Please enter a valid positive bet.'
         );
     }
 
     const release =
-        withGardenLock(
+        acquireLock(
             guildId,
             userId
         );
@@ -490,7 +279,7 @@ export async function startFruitGarden(
             throw createError(
                 'Insufficient cash',
                 ErrorTypes.VALIDATION,
-                `You only have **${formatCurrency(wallet)}** cash, but you need **${formatCurrency(betAmount)}** to start Fruit Garden.`
+                `You only have **${formatMoney(wallet)}** cash.`
             );
         }
 
@@ -498,15 +287,15 @@ export async function startFruitGarden(
             userData?.fruitGarden?.active
         ) {
             throw createError(
-                'Fruit Garden already active',
+                'Garden already active',
                 ErrorTypes.VALIDATION,
-                'You already have an active Fruit Garden game.'
+                'You already have an active Fruit Garden.'
             );
         }
 
         /*
         |--------------------------------------------------------------------------
-        | Deduct the bet immediately.
+        | Remove the bet from the wallet.
         |--------------------------------------------------------------------------
         */
 
@@ -516,15 +305,34 @@ export async function startFruitGarden(
 
         const garden = {
             active: true,
-            bet: betAmount,
-            payout: betAmount,
+
+            bet:
+                betAmount,
+
             steps: 0,
+
+            maxSteps:
+                MAX_STEPS,
+
             failureChance:
-                STARTING_FAILURE_CHANCE,
+                FAILURE_CHANCE,
+
+            currentPayout: 0,
+
+            nextPayout:
+                calculateNextPayout(
+                    betAmount,
+                    0
+                ),
+
             display:
-                createGardenDisplay(0),
+                generateGardenDisplay(
+                    0
+                ),
+
             startedAt:
                 Date.now(),
+
             lastActionAt:
                 Date.now(),
         };
@@ -532,12 +340,21 @@ export async function startFruitGarden(
         userData.fruitGarden =
             garden;
 
-        await setEconomyData(
-            client,
-            guildId,
-            userId,
-            userData
-        );
+        const saved =
+            await setEconomyData(
+                client,
+                guildId,
+                userId,
+                userData
+            );
+
+        if (!saved) {
+            throw createError(
+                'Fruit Garden save failed',
+                ErrorTypes.DATABASE,
+                'I could not save your Fruit Garden. Please try again.'
+            );
+        }
 
         return garden;
     } finally {
@@ -548,7 +365,7 @@ export async function startFruitGarden(
 
 /*
 |--------------------------------------------------------------------------
-| Grow / Plant
+| Grow Garden
 |--------------------------------------------------------------------------
 */
 
@@ -558,7 +375,7 @@ export async function growFruitGarden(
     userId
 ) {
     const release =
-        withGardenLock(
+        acquireLock(
             guildId,
             userId
         );
@@ -580,36 +397,38 @@ export async function growFruitGarden(
             throw createError(
                 'No active Fruit Garden',
                 ErrorTypes.VALIDATION,
-                'You do not have an active Fruit Garden game.'
+                'You do not have an active Fruit Garden.'
             );
         }
 
+        const steps =
+            Number(
+                garden.steps || 0
+            );
+
         if (
-            Number(garden.steps || 0) >=
+            steps >=
             MAX_STEPS
         ) {
             throw createError(
-                'Maximum Fruit Garden steps reached',
+                'Garden complete',
                 ErrorTypes.VALIDATION,
-                'Your Fruit Garden has reached the maximum number of steps. Please cash out.'
+                'Your Fruit Garden is fully grown. Cash out your payout!'
             );
         }
 
         /*
         |--------------------------------------------------------------------------
-        | Roll failure BEFORE increasing payout.
+        | Failure Roll
         |--------------------------------------------------------------------------
         */
 
-        const failure =
+        const failed =
             Math.random() <
-            Number(
-                garden.failureChance ??
-                STARTING_FAILURE_CHANCE
-            );
+            FAILURE_CHANCE;
 
-        if (failure) {
-            const lostBet =
+        if (failed) {
+            const lostAmount =
                 Number(
                     garden.bet || 0
                 );
@@ -623,6 +442,12 @@ export async function growFruitGarden(
             garden.lastActionAt =
                 Date.now();
 
+            garden.currentPayout =
+                0;
+
+            garden.nextPayout =
+                0;
+
             userData.fruitGarden =
                 garden;
 
@@ -635,8 +460,11 @@ export async function growFruitGarden(
 
             return {
                 result: 'failed',
+
                 garden,
-                lostAmount: lostBet,
+
+                lostAmount,
+
                 wallet:
                     Number(
                         userData.wallet || 0
@@ -646,40 +474,35 @@ export async function growFruitGarden(
 
         /*
         |--------------------------------------------------------------------------
-        | Successful growth
+        | Successful Plant
         |--------------------------------------------------------------------------
         */
 
-        garden.steps =
-            Number(
-                garden.steps || 0
-            ) + 1;
+        const newSteps =
+            steps + 1;
 
-        garden.payout =
+        garden.steps =
+            newSteps;
+
+        garden.currentPayout =
+            calculateCurrentPayout(
+                garden.bet,
+                newSteps
+            );
+
+        garden.nextPayout =
             calculateNextPayout(
-                Number(
-                    garden.payout ||
-                    garden.bet ||
-                    0
-                )
+                garden.bet,
+                newSteps
+            );
+
+        garden.display =
+            generateGardenDisplay(
+                newSteps
             );
 
         garden.lastActionAt =
             Date.now();
-
-        garden.display =
-            createGardenDisplay(
-                garden.steps
-            );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Failure chance stays at 20%, matching the requested game style.
-        |--------------------------------------------------------------------------
-        */
-
-        garden.failureChance =
-            STARTING_FAILURE_CHANCE;
 
         userData.fruitGarden =
             garden;
@@ -693,7 +516,9 @@ export async function growFruitGarden(
 
         return {
             result: 'success',
+
             garden,
+
             wallet:
                 Number(
                     userData.wallet || 0
@@ -717,7 +542,7 @@ export async function cashOutFruitGarden(
     userId
 ) {
     const release =
-        withGardenLock(
+        acquireLock(
             guildId,
             userId
         );
@@ -739,35 +564,28 @@ export async function cashOutFruitGarden(
             throw createError(
                 'No active Fruit Garden',
                 ErrorTypes.VALIDATION,
-                'You do not have an active Fruit Garden game.'
+                'You do not have an active Fruit Garden.'
             );
         }
 
         const payout =
-            Math.max(
-                0,
-                Math.floor(
-                    Number(
-                        garden.payout ||
-                        garden.bet ||
-                        0
-                    )
-                )
+            Number(
+                garden.currentPayout || 0
             );
 
         if (
             payout <= 0
         ) {
             throw createError(
-                'Invalid Fruit Garden payout',
-                ErrorTypes.UNKNOWN,
-                'The Fruit Garden payout could not be calculated.'
+                'Nothing to cash out',
+                ErrorTypes.VALIDATION,
+                'You need to successfully plant at least one fruit before you can cash out.'
             );
         }
 
         /*
         |--------------------------------------------------------------------------
-        | Add payout to wallet and close the game.
+        | Return payout to wallet.
         |--------------------------------------------------------------------------
         */
 
@@ -798,8 +616,11 @@ export async function cashOutFruitGarden(
 
         return {
             result: 'cashed_out',
+
             garden,
+
             payout,
+
             wallet:
                 Number(
                     userData.wallet || 0
@@ -808,4 +629,250 @@ export async function cashOutFruitGarden(
     } finally {
         release();
     }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Garden Embed
+|--------------------------------------------------------------------------
+*/
+
+export function buildFruitGardenEmbed(
+    user,
+    garden,
+    result = null
+) {
+    const bet =
+        Number(
+            garden?.bet || 0
+        );
+
+    const steps =
+        Number(
+            garden?.steps || 0
+        );
+
+    const currentPayout =
+        Number(
+            garden?.currentPayout || 0
+        );
+
+    const nextPayout =
+        result === 'failed'
+            ? 0
+            : Number(
+                garden?.nextPayout ||
+                calculateNextPayout(
+                    bet,
+                    steps
+                )
+            );
+
+    const failureChance =
+        Number(
+            garden?.failureChance ??
+            FAILURE_CHANCE
+        );
+
+    const display =
+        garden?.display ||
+        generateGardenDisplay(
+            steps
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Title
+    |--------------------------------------------------------------------------
+    */
+
+    let title =
+        `🍓 ${user.username}'s fruit garden.`;
+
+    let color =
+        0xF8D568;
+
+    if (
+        result === 'failed'
+    ) {
+        title =
+            `💥 ${user.username}'s fruit garden failed!`;
+
+        color =
+            0xED4245;
+    }
+
+    if (
+        result === 'cashed_out'
+    ) {
+        title =
+            `💰 ${user.username}'s fruit garden.`;
+
+        color =
+            0x57F287;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Description
+    |--------------------------------------------------------------------------
+    */
+
+    let description =
+        `Bet: **${bet.toLocaleString()}**   ` +
+        `Steps: **${steps}**   ` +
+        `Failure Chance: **${formatPercent(failureChance)}**\n` +
+        `Cash Out: **${currentPayout.toLocaleString()}** ` +
+        `(${bet > 0 ? (currentPayout / bet).toFixed(2) : '0.00'}x)   ` +
+        `Next: **${nextPayout.toLocaleString()}** ` +
+        `(${bet > 0 ? (nextPayout / bet).toFixed(2) : '0.00'}x)\n\n` +
+        `${display}`;
+
+    if (
+        result === 'failed'
+    ) {
+        description =
+            `Bet: **${bet.toLocaleString()}**   ` +
+            `Steps: **${steps}**   ` +
+            `Failure Chance: **${formatPercent(failureChance)}**\n` +
+            `Cash Out: **0** (0x)   ` +
+            `Next: **0** (0x)\n\n` +
+            `${display}\n\n` +
+            `💥 The garden failed. You lost **${formatMoney(bet)}**.`;
+    }
+
+    if (
+        result === 'cashed_out'
+    ) {
+        description =
+            `Bet: **${bet.toLocaleString()}**   ` +
+            `Steps: **${steps}**   ` +
+            `Failure Chance: **${formatPercent(failureChance)}**\n` +
+            `Cash Out: **${currentPayout.toLocaleString()}** ` +
+            `(${bet > 0 ? (currentPayout / bet).toFixed(2) : '0.00'}x)\n\n` +
+            `${display}\n\n` +
+            `💰 You cashed out **${formatMoney(currentPayout)}**.`;
+    }
+
+    const embed =
+        new EmbedBuilder()
+            .setColor(color)
+            .setTitle(title)
+            .setDescription(
+                description
+            );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Footer
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        result === 'failed'
+    ) {
+        embed.setFooter({
+            text:
+                'Fruit Garden • Better luck next time!',
+        });
+    } else if (
+        result === 'cashed_out'
+    ) {
+        embed.setFooter({
+            text:
+                'Fruit Garden • Winnings added to your wallet.',
+        });
+    } else {
+        embed.setFooter({
+            text:
+                'Fruit Garden • Keep planting or cash out before it fails.',
+        });
+    }
+
+    return embed;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Buttons
+|--------------------------------------------------------------------------
+*/
+
+export function buildFruitGardenComponents(
+    garden
+) {
+    if (
+        !garden?.active
+    ) {
+        return [];
+    }
+
+    const steps =
+        Number(
+            garden.steps || 0
+        );
+
+    const currentPayout =
+        Number(
+            garden.currentPayout || 0
+        );
+
+    const nextPayout =
+        Number(
+            garden.nextPayout ||
+            calculateNextPayout(
+                garden.bet,
+                steps
+            )
+        );
+
+    const increase =
+        Math.max(
+            0,
+            nextPayout -
+            currentPayout
+        );
+
+    const plantButton =
+        new ButtonBuilder()
+            .setCustomId(
+                'fg_grow'
+            )
+            .setEmoji(
+                '🌱'
+            )
+            .setLabel(
+                `Plant (+${increase.toLocaleString()})`
+            )
+            .setStyle(
+                ButtonStyle.Primary
+            )
+            .setDisabled(
+                steps >= MAX_STEPS
+            );
+
+    const cashOutButton =
+        new ButtonBuilder()
+            .setCustomId(
+                'fg_cashout'
+            )
+            .setLabel(
+                `Cash Out`
+            )
+            .setStyle(
+                ButtonStyle.Success
+            )
+            .setDisabled(
+                currentPayout <= 0
+            );
+
+    return [
+        new ActionRowBuilder()
+            .addComponents(
+                plantButton,
+                cashOutButton
+            ),
+    ];
 }
