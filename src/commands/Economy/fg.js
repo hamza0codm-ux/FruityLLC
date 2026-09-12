@@ -60,10 +60,11 @@ export default {
             const guildId =
                 interaction.guildId;
 
-            const betAmount =
-                interaction.options.getInteger(
-                    'amount'
-                );
+            /*
+            |--------------------------------------------------------------------------
+            | Get Existing Economy Data
+            |--------------------------------------------------------------------------
+            */
 
             const userData =
                 await getEconomyData(
@@ -72,15 +73,69 @@ export default {
                     userId
                 );
 
+            /*
+            |--------------------------------------------------------------------------
+            | EXISTING ACTIVE GARDEN
+            |--------------------------------------------------------------------------
+            |
+            | If the user already has a garden, /fg simply resends the
+            | current panel.
+            |
+            | It DOES NOT:
+            | - take another bet
+            | - create another garden
+            | - reset the steps
+            | - reset the fruits
+            |
+            |--------------------------------------------------------------------------
+            */
+
             if (
                 userData?.fruitGarden?.active
             ) {
-                throw createError(
-                    'Fruit Garden already active',
-                    ErrorTypes.VALIDATION,
-                    'You already have an active Fruit Garden. Plant or cash out your current garden first.'
+                const garden =
+                    userData.fruitGarden;
+
+                const embed =
+                    buildFruitGardenEmbed(
+                        interaction.user,
+                        garden
+                    );
+
+                const components =
+                    buildFruitGardenComponents(
+                        garden
+                    );
+
+                await InteractionHelper.safeEditReply(
+                    interaction,
+                    {
+                        embeds: [
+                            embed,
+                        ],
+                        components,
+                    }
                 );
+
+                return;
             }
+
+            /*
+            |--------------------------------------------------------------------------
+            | New Garden
+            |--------------------------------------------------------------------------
+            */
+
+            const betAmount =
+                interaction.options.getInteger(
+                    'amount'
+                );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Check Balance
+            |--------------------------------------------------------------------------
+            */
 
             if (
                 Number(userData?.wallet || 0) <
@@ -93,6 +148,12 @@ export default {
                 );
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Start Garden
+            |--------------------------------------------------------------------------
+            */
+
             const garden =
                 await startFruitGarden(
                     client,
@@ -100,6 +161,12 @@ export default {
                     userId,
                     betAmount
                 );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Build Panel
+            |--------------------------------------------------------------------------
+            */
 
             const embed =
                 buildFruitGardenEmbed(
@@ -111,6 +178,12 @@ export default {
                 buildFruitGardenComponents(
                     garden
                 );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Send Panel
+            |--------------------------------------------------------------------------
+            */
 
             await InteractionHelper.safeEditReply(
                 interaction,
