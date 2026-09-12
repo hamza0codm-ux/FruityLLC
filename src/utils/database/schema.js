@@ -38,8 +38,12 @@ export const tableStatements = [
         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (guild_id, user_id),
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES ${t.users}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE,
+        FOREIGN KEY (user_id)
+            REFERENCES ${t.users}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.birthdays} (
@@ -50,8 +54,12 @@ export const tableStatements = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (guild_id, user_id),
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES ${t.users}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE,
+        FOREIGN KEY (user_id)
+            REFERENCES ${t.users}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.giveaways} (
@@ -62,7 +70,9 @@ export const tableStatements = [
         ends_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE,
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE,
         UNIQUE(guild_id, message_id)
     )`,
 
@@ -73,7 +83,9 @@ export const tableStatements = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP,
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.afk_status} (
@@ -83,8 +95,12 @@ export const tableStatements = [
         status_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP,
         PRIMARY KEY (guild_id, user_id),
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES ${t.users}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE,
+        FOREIGN KEY (user_id)
+            REFERENCES ${t.users}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.welcome_configs} (
@@ -92,7 +108,9 @@ export const tableStatements = [
         config JSONB NOT NULL DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.leveling_configs} (
@@ -100,7 +118,9 @@ export const tableStatements = [
         config JSONB NOT NULL DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.user_levels} (
@@ -114,8 +134,12 @@ export const tableStatements = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (guild_id, user_id),
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES ${t.users}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE,
+        FOREIGN KEY (user_id)
+            REFERENCES ${t.users}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.economy} (
@@ -127,8 +151,12 @@ export const tableStatements = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (guild_id, user_id),
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES ${t.users}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE,
+        FOREIGN KEY (user_id)
+            REFERENCES ${t.users}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.verification_audit} (
@@ -151,7 +179,9 @@ export const tableStatements = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (guild_id, invite_code),
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.application_roles} (
@@ -161,7 +191,9 @@ export const tableStatements = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (guild_id, role_id),
-        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE
     )`,
 
     `CREATE TABLE IF NOT EXISTS ${t.temp_data} (
@@ -177,44 +209,182 @@ export const tableStatements = [
         expires_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
+
+    /*
+     * Fruity Garden
+     *
+     * One active/current garden per user per guild.
+     */
+    `CREATE TABLE IF NOT EXISTS ${t.fruit_gardens} (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+
+        bet BIGINT NOT NULL DEFAULT 100,
+
+        steps INTEGER NOT NULL DEFAULT 0,
+
+        current_multiplier NUMERIC(10, 4) NOT NULL DEFAULT 1.0000,
+
+        cash_out BIGINT NOT NULL DEFAULT 0,
+
+        failure_chance NUMERIC(6, 3) NOT NULL DEFAULT 20.000,
+
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+
+        garden JSONB NOT NULL DEFAULT '[]',
+
+        planted_fruit VARCHAR(50),
+
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+        completed_at TIMESTAMP,
+
+        PRIMARY KEY (guild_id, user_id),
+
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE,
+
+        FOREIGN KEY (user_id)
+            REFERENCES ${t.users}(id)
+            ON DELETE CASCADE,
+
+        CONSTRAINT fruit_gardens_status_check
+            CHECK (
+                status IN (
+                    'active',
+                    'cashed_out',
+                    'failed',
+                    'completed'
+                )
+            ),
+
+        CONSTRAINT fruit_gardens_bet_check
+            CHECK (bet > 0),
+
+        CONSTRAINT fruit_gardens_steps_check
+            CHECK (steps >= 0),
+
+        CONSTRAINT fruit_gardens_cash_out_check
+            CHECK (cash_out >= 0),
+
+        CONSTRAINT fruit_gardens_failure_chance_check
+            CHECK (
+                failure_chance >= 0
+                AND failure_chance <= 100
+            )
+    )`,
+
+    /*
+     * Fruity Garden fruit collection.
+     */
+    `CREATE TABLE IF NOT EXISTS ${t.fruit_garden_inventory} (
+        guild_id TEXT NOT NULL,
+
+        user_id TEXT NOT NULL,
+
+        fruit_key VARCHAR(50) NOT NULL,
+
+        quantity BIGINT NOT NULL DEFAULT 0,
+
+        first_found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+        PRIMARY KEY (
+            guild_id,
+            user_id,
+            fruit_key
+        ),
+
+        FOREIGN KEY (guild_id)
+            REFERENCES ${t.guilds}(id)
+            ON DELETE CASCADE,
+
+        FOREIGN KEY (user_id)
+            REFERENCES ${t.users}(id)
+            ON DELETE CASCADE,
+
+        CONSTRAINT fruit_garden_inventory_quantity_check
+            CHECK (quantity >= 0)
+    )`,
 ];
 
 export const indexStatements = [
-    `CREATE INDEX IF NOT EXISTS idx_guild_users_guild_id ON ${t.guild_users}(guild_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_guild_users_guild_id
+        ON ${t.guild_users}(guild_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_guild_users_user_id ON ${t.guild_users}(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_guild_users_user_id
+        ON ${t.guild_users}(user_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_birthdays_guild_id ON ${t.birthdays}(guild_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_birthdays_guild_id
+        ON ${t.birthdays}(guild_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_birthdays_month_day ON ${t.birthdays}(month, day)`,
+    `CREATE INDEX IF NOT EXISTS idx_birthdays_month_day
+        ON ${t.birthdays}(month, day)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_giveaways_guild_id ON ${t.giveaways}(guild_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_giveaways_guild_id
+        ON ${t.giveaways}(guild_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_giveaways_ends_at ON ${t.giveaways}(ends_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_giveaways_ends_at
+        ON ${t.giveaways}(ends_at)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_tickets_guild_id ON ${t.tickets}(guild_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_tickets_guild_id
+        ON ${t.tickets}(guild_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_tickets_expires_at ON ${t.tickets}(expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_tickets_expires_at
+        ON ${t.tickets}(expires_at)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_afk_status_guild_id ON ${t.afk_status}(guild_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_afk_status_guild_id
+        ON ${t.afk_status}(guild_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_afk_status_expires_at ON ${t.afk_status}(expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_afk_status_expires_at
+        ON ${t.afk_status}(expires_at)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_user_levels_guild_id ON ${t.user_levels}(guild_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_user_levels_guild_id
+        ON ${t.user_levels}(guild_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_user_levels_xp ON ${t.user_levels}(xp)`,
+    `CREATE INDEX IF NOT EXISTS idx_user_levels_xp
+        ON ${t.user_levels}(xp)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_economy_guild_id ON ${t.economy}(guild_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_economy_guild_id
+        ON ${t.economy}(guild_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_verification_audit_guild_id ON ${t.verification_audit}(guild_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_verification_audit_guild_id
+        ON ${t.verification_audit}(guild_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_verification_audit_user_id ON ${t.verification_audit}(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_verification_audit_user_id
+        ON ${t.verification_audit}(user_id)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_verification_audit_created_at ON ${t.verification_audit}(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_verification_audit_created_at
+        ON ${t.verification_audit}(created_at)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_temp_data_expires_at ON ${t.temp_data}(expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_temp_data_expires_at
+        ON ${t.temp_data}(expires_at)`,
 
-    `CREATE INDEX IF NOT EXISTS idx_cache_data_expires_at ON ${t.cache_data}(expires_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_cache_data_expires_at
+        ON ${t.cache_data}(expires_at)`,
+
+    // Fruity Garden
+    `CREATE INDEX IF NOT EXISTS idx_fruit_gardens_guild_id
+        ON ${t.fruit_gardens}(guild_id)`,
+
+    `CREATE INDEX IF NOT EXISTS idx_fruit_gardens_status
+        ON ${t.fruit_gardens}(status)`,
+
+    `CREATE INDEX IF NOT EXISTS idx_fruit_gardens_updated_at
+        ON ${t.fruit_gardens}(updated_at)`,
+
+    `CREATE INDEX IF NOT EXISTS idx_fruit_garden_inventory_guild_id
+        ON ${t.fruit_garden_inventory}(guild_id)`,
+
+    `CREATE INDEX IF NOT EXISTS idx_fruit_garden_inventory_user_id
+        ON ${t.fruit_garden_inventory}(user_id)`,
+
+    `CREATE INDEX IF NOT EXISTS idx_fruit_garden_inventory_fruit_key
+        ON ${t.fruit_garden_inventory}(fruit_key)`,
 ];
 
 export const UPDATE_TIMESTAMP_FUNCTION = `
@@ -228,17 +398,78 @@ $$ language 'plpgsql';
 `;
 
 export const triggerDefinitions = [
-    { name: 'update_guilds_updated_at', table: t.guilds },
-    { name: 'update_users_updated_at', table: t.users },
-    { name: 'update_welcome_configs_updated_at', table: t.welcome_configs },
-    { name: 'update_leveling_configs_updated_at', table: t.leveling_configs },
-    { name: 'update_user_levels_updated_at', table: t.user_levels },
-    { name: 'update_economy_updated_at', table: t.economy },
-    { name: 'update_application_roles_updated_at', table: t.application_roles },
-    { name: 'update_invite_tracking_updated_at', table: t.invite_tracking },
-    { name: 'update_guild_users_updated_at', table: t.guild_users },
-    { name: 'update_birthdays_updated_at', table: t.birthdays },
-    { name: 'update_giveaways_updated_at', table: t.giveaways },
-    { name: 'update_tickets_updated_at', table: t.tickets },
-    { name: 'update_afk_status_updated_at', table: t.afk_status },
+    {
+        name: 'update_guilds_updated_at',
+        table: t.guilds,
+    },
+
+    {
+        name: 'update_users_updated_at',
+        table: t.users,
+    },
+
+    {
+        name: 'update_welcome_configs_updated_at',
+        table: t.welcome_configs,
+    },
+
+    {
+        name: 'update_leveling_configs_updated_at',
+        table: t.leveling_configs,
+    },
+
+    {
+        name: 'update_user_levels_updated_at',
+        table: t.user_levels,
+    },
+
+    {
+        name: 'update_economy_updated_at',
+        table: t.economy,
+    },
+
+    {
+        name: 'update_application_roles_updated_at',
+        table: t.application_roles,
+    },
+
+    {
+        name: 'update_invite_tracking_updated_at',
+        table: t.invite_tracking,
+    },
+
+    {
+        name: 'update_guild_users_updated_at',
+        table: t.guild_users,
+    },
+
+    {
+        name: 'update_birthdays_updated_at',
+        table: t.birthdays,
+    },
+
+    {
+        name: 'update_giveaways_updated_at',
+        table: t.giveaways,
+    },
+
+    {
+        name: 'update_tickets_updated_at',
+        table: t.tickets,
+    },
+
+    {
+        name: 'update_afk_status_updated_at',
+        table: t.afk_status,
+    },
+
+    {
+        name: 'update_fruit_gardens_updated_at',
+        table: t.fruit_gardens,
+    },
+
+    {
+        name: 'update_fruit_garden_inventory_updated_at',
+        table: t.fruit_garden_inventory,
+    },
 ];
