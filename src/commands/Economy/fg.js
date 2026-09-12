@@ -83,13 +83,13 @@ export default {
             }
 
             if (
-                Number(userData.wallet || 0) <
+                Number(userData?.wallet || 0) <
                 betAmount
             ) {
                 throw createError(
                     'Insufficient Fruit Garden funds',
                     ErrorTypes.VALIDATION,
-                    `You only have **$${Number(userData.wallet || 0).toLocaleString()}** cash, but your bet is **$${betAmount.toLocaleString()}**.`
+                    `You only have **$${Number(userData?.wallet || 0).toLocaleString()}** cash, but your bet is **$${betAmount.toLocaleString()}**.`
                 );
             }
 
@@ -115,7 +115,9 @@ export default {
             await InteractionHelper.safeEditReply(
                 interaction,
                 {
-                    embeds: [embed],
+                    embeds: [
+                        embed,
+                    ],
                     components,
                 }
             );
