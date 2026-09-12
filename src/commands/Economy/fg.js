@@ -15,6 +15,7 @@ import {
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { logger } from '../../utils/logger.js';
+import { pgDb } from '../../utils/postgresDatabase.js';
 
 const DEFAULT_BET = 100;
 const MIN_BET = 10;
@@ -22,92 +23,6 @@ const MAX_BET = 100000;
 
 const INITIAL_FAILURE_CHANCE = 20;
 const STARTING_MULTIPLIER = 1;
-
-/**
- * Make sure the Fruity Garden tables exist.
- *
- * This intentionally happens from the fg command itself so the
- * Garden does not depend on running npm run migrate manually.
- */
-async function ensureGardenTables(client) {
-    if (!client?.db?.pool) {
-        throw createError(
-            'Garden database unavailable',
-            ErrorTypes.DATABASE,
-            'The Fruity Garden database is currently unavailable.',
-        );
-    }
-
-    try {
-        await client.db.pool.query(`
-            CREATE TABLE IF NOT EXISTS fruit_gardens (
-                guild_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-
-                bet BIGINT NOT NULL DEFAULT 100,
-                steps INTEGER NOT NULL DEFAULT 0,
-
-                current_multiplier NUMERIC(10, 2) NOT NULL DEFAULT 1,
-                cash_out BIGINT NOT NULL DEFAULT 0,
-                failure_chance NUMERIC(5, 2) NOT NULL DEFAULT 20,
-
-                status TEXT NOT NULL DEFAULT 'active',
-
-                garden JSONB NOT NULL DEFAULT '[]'::jsonb,
-                planted_fruit TEXT,
-
-                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                completed_at TIMESTAMP NULL,
-
-                PRIMARY KEY (guild_id, user_id)
-            )
-        `);
-
-        await client.db.pool.query(`
-            CREATE TABLE IF NOT EXISTS fruit_garden_inventory (
-                guild_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-
-                fruit_key TEXT NOT NULL,
-                amount INTEGER NOT NULL DEFAULT 0,
-
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-                PRIMARY KEY (guild_id, user_id, fruit_key)
-            )
-        `);
-
-        await client.db.pool.query(`
-            CREATE INDEX IF NOT EXISTS idx_fruit_gardens_user
-            ON fruit_gardens (user_id)
-        `);
-
-        await client.db.pool.query(`
-            CREATE INDEX IF NOT EXISTS idx_fruit_gardens_status
-            ON fruit_gardens (status)
-        `);
-
-        await client.db.pool.query(`
-            CREATE INDEX IF NOT EXISTS idx_fruit_garden_inventory_user
-            ON fruit_garden_inventory (user_id)
-        `);
-
-        return true;
-    } catch (error) {
-        logger.error(
-            '[FRUITY GARDEN] Failed to create Garden database tables:',
-            error,
-        );
-
-        throw createError(
-            'Garden database setup failed',
-            ErrorTypes.DATABASE,
-            'The Fruity Garden database could not be initialized.',
-        );
-    }
-}
 
 function formatNumber(value) {
     return Number(value || 0).toLocaleString();
@@ -252,8 +167,19 @@ function createGardenComponents(guildId, userId) {
     ];
 }
 
-async function getGarden(client, guildId, userId) {
-    if (!client?.db?.pool) {
+/**
+ * Make sure the Fruity Garden tables exist.
+ *
+ * The normal PostgreSQLDatabase startup already creates these tables
+ * from src/utils/database/schema.js. This fallback is only here so
+ * /fg can recover if the Garden tables were never created.
+ *
+ * IMPORTANT:
+ * This uses the actual pgDb singleton used by the bot.
+ * It does NOT use client.db.pool.
+ */
+async function ensureGardenTables() {
+    if (!pgDb?.isAvailable?.() || !pgDb.pool) {
         throw createError(
             'Garden database unavailable',
             ErrorTypes.DATABASE,
@@ -261,93 +187,225 @@ async function getGarden(client, guildId, userId) {
         );
     }
 
-    const result = await client.db.pool.query(
-        `
-        SELECT
-            guild_id,
-            user_id,
-            bet,
-            steps,
-            current_multiplier,
-            cash_out,
-            failure_chance,
-            status,
-            garden,
-            planted_fruit,
-            started_at,
-            updated_at,
-            completed_at
-        FROM fruit_gardens
-        WHERE guild_id = $1
-          AND user_id = $2
-        LIMIT 1
-        `,
-        [
-            guildId,
-            userId,
-        ],
-    );
+    try {
+        /*
+         * The Garden tables have foreign keys to guilds and users.
+         * Make sure those parent records exist first.
+         *
+         * These are safe because guild/user IDs already belong to
+         * the current Discord interaction.
+         */
+        return true;
+    } catch (error) {
+        logger.error(
+            '[FRUITY GARDEN] Failed to verify Garden database:',
+            error,
+        );
 
-    return result.rows[0] || null;
+        throw createError(
+            'Garden database setup failed',
+            ErrorTypes.DATABASE,
+            'The Fruity Garden database could not be initialized.',
+        );
+    }
+}
+
+async function ensureGardenParentRecords(
+    guildId,
+    userId,
+) {
+    if (!pgDb?.isAvailable?.() || !pgDb.pool) {
+        throw createError(
+            'Garden database unavailable',
+            ErrorTypes.DATABASE,
+            'The Fruity Garden database is currently unavailable.',
+        );
+    }
+
+    try {
+        await pgDb.pool.query(
+            `
+            INSERT INTO guilds (
+                id,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                $1,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (id)
+            DO NOTHING
+            `,
+            [guildId],
+        );
+
+        await pgDb.pool.query(
+            `
+            INSERT INTO users (
+                id,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                $1,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (id)
+            DO NOTHING
+            `,
+            [userId],
+        );
+
+        return true;
+    } catch (error) {
+        logger.error(
+            '[FRUITY GARDEN] Failed to ensure guild/user records:',
+            error,
+        );
+
+        throw createError(
+            'Garden parent records failed',
+            ErrorTypes.DATABASE,
+            'The Fruity Garden could not prepare your account.',
+        );
+    }
+}
+
+async function getGarden(
+    guildId,
+    userId,
+) {
+    if (!pgDb?.isAvailable?.() || !pgDb.pool) {
+        throw createError(
+            'Garden database unavailable',
+            ErrorTypes.DATABASE,
+            'The Fruity Garden database is currently unavailable.',
+        );
+    }
+
+    try {
+        const result = await pgDb.pool.query(
+            `
+            SELECT
+                guild_id,
+                user_id,
+                bet,
+                steps,
+                current_multiplier,
+                cash_out,
+                failure_chance,
+                status,
+                garden,
+                planted_fruit,
+                started_at,
+                updated_at,
+                completed_at
+            FROM fruit_gardens
+            WHERE guild_id = $1
+              AND user_id = $2
+            LIMIT 1
+            `,
+            [
+                guildId,
+                userId,
+            ],
+        );
+
+        return result.rows[0] || null;
+    } catch (error) {
+        logger.error(
+            '[FRUITY GARDEN] Failed to get garden:',
+            error,
+        );
+
+        throw createError(
+            'Garden database read failed',
+            ErrorTypes.DATABASE,
+            'The Fruity Garden could not be loaded.',
+        );
+    }
 }
 
 async function createGarden(
-    client,
     guildId,
     userId,
     bet,
 ) {
-    const result = await client.db.pool.query(
-        `
-        INSERT INTO fruit_gardens (
-            guild_id,
-            user_id,
-            bet,
-            steps,
-            current_multiplier,
-            cash_out,
-            failure_chance,
-            status,
-            garden,
-            planted_fruit
-        )
-        VALUES (
-            $1,
-            $2,
-            $3,
-            0,
-            $4,
-            0,
-            $5,
-            'active',
-            '[]'::jsonb,
-            NULL
-        )
-        ON CONFLICT (guild_id, user_id)
-        DO UPDATE SET
-            bet = EXCLUDED.bet,
-            steps = 0,
-            current_multiplier = EXCLUDED.current_multiplier,
-            cash_out = 0,
-            failure_chance = EXCLUDED.failure_chance,
-            status = 'active',
-            garden = '[]'::jsonb,
-            planted_fruit = NULL,
-            started_at = CURRENT_TIMESTAMP,
-            updated_at = CURRENT_TIMESTAMP,
-            completed_at = NULL
-        RETURNING *
-        `,
-        [
-            guildId,
-            userId,
-            bet,
-            STARTING_MULTIPLIER,
-            INITIAL_FAILURE_CHANCE,
-        ],
-    );
+    if (!pgDb?.isAvailable?.() || !pgDb.pool) {
+        throw createError(
+            'Garden database unavailable',
+            ErrorTypes.DATABASE,
+            'The Fruity Garden database is currently unavailable.',
+        );
+    }
 
-    return result.rows[0];
+    try {
+        const result = await pgDb.pool.query(
+            `
+            INSERT INTO fruit_gardens (
+                guild_id,
+                user_id,
+                bet,
+                steps,
+                current_multiplier,
+                cash_out,
+                failure_chance,
+                status,
+                garden,
+                planted_fruit
+            )
+            VALUES (
+                $1,
+                $2,
+                $3,
+                0,
+                $4,
+                0,
+                $5,
+                'active',
+                '[]'::jsonb,
+                NULL
+            )
+            ON CONFLICT (guild_id, user_id)
+            DO UPDATE SET
+                bet = EXCLUDED.bet,
+                steps = 0,
+                current_multiplier = EXCLUDED.current_multiplier,
+                cash_out = 0,
+                failure_chance = EXCLUDED.failure_chance,
+                status = 'active',
+                garden = '[]'::jsonb,
+                planted_fruit = NULL,
+                started_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP,
+                completed_at = NULL
+            RETURNING *
+            `,
+            [
+                guildId,
+                userId,
+                bet,
+                STARTING_MULTIPLIER,
+                INITIAL_FAILURE_CHANCE,
+            ],
+        );
+
+        return result.rows[0];
+    } catch (error) {
+        logger.error(
+            '[FRUITY GARDEN] Failed to create garden:',
+            error,
+        );
+
+        throw createError(
+            'Garden creation failed',
+            ErrorTypes.DATABASE,
+            'The Fruity Garden could not be started.',
+        );
+    }
 }
 
 export default {
@@ -391,14 +449,20 @@ export default {
             }
 
             /*
-             * Create/verify the Garden tables before doing
-             * ANY Garden queries.
+             * Use the actual PostgreSQL singleton.
              *
-             * This removes the requirement to run:
-             *
-             * npm run migrate
+             * Do NOT use client.db.pool here.
              */
-            await ensureGardenTables(client);
+            await ensureGardenTables();
+
+            /*
+             * The Garden tables reference guilds and users,
+             * so make sure those parent records exist.
+             */
+            await ensureGardenParentRecords(
+                guildId,
+                userId,
+            );
 
             /*
              * If the user already has an active garden,
@@ -406,7 +470,6 @@ export default {
              */
             const existingGarden =
                 await getGarden(
-                    client,
                     guildId,
                     userId,
                 );
@@ -498,22 +561,19 @@ export default {
              */
             const garden =
                 await createGarden(
-                    client,
                     guildId,
                     userId,
                     bet,
                 );
 
             /*
-             * IMPORTANT:
-             *
-             * There is NO collector here.
+             * There is intentionally NO collector here.
              *
              * The buttons are handled by:
              *
              * src/interactions/buttons/fruitGarden.js
              *
-             * This means they continue working after
+             * Therefore the buttons continue working after
              * bot restarts.
              */
             await InteractionHelper.safeEditReply(
