@@ -23,6 +23,92 @@ const MAX_BET = 100000;
 const INITIAL_FAILURE_CHANCE = 20;
 const STARTING_MULTIPLIER = 1;
 
+/**
+ * Make sure the Fruity Garden tables exist.
+ *
+ * This intentionally happens from the fg command itself so the
+ * Garden does not depend on running npm run migrate manually.
+ */
+async function ensureGardenTables(client) {
+    if (!client?.db?.pool) {
+        throw createError(
+            'Garden database unavailable',
+            ErrorTypes.DATABASE,
+            'The Fruity Garden database is currently unavailable.',
+        );
+    }
+
+    try {
+        await client.db.pool.query(`
+            CREATE TABLE IF NOT EXISTS fruit_gardens (
+                guild_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+
+                bet BIGINT NOT NULL DEFAULT 100,
+                steps INTEGER NOT NULL DEFAULT 0,
+
+                current_multiplier NUMERIC(10, 2) NOT NULL DEFAULT 1,
+                cash_out BIGINT NOT NULL DEFAULT 0,
+                failure_chance NUMERIC(5, 2) NOT NULL DEFAULT 20,
+
+                status TEXT NOT NULL DEFAULT 'active',
+
+                garden JSONB NOT NULL DEFAULT '[]'::jsonb,
+                planted_fruit TEXT,
+
+                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP NULL,
+
+                PRIMARY KEY (guild_id, user_id)
+            )
+        `);
+
+        await client.db.pool.query(`
+            CREATE TABLE IF NOT EXISTS fruit_garden_inventory (
+                guild_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+
+                fruit_key TEXT NOT NULL,
+                amount INTEGER NOT NULL DEFAULT 0,
+
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                PRIMARY KEY (guild_id, user_id, fruit_key)
+            )
+        `);
+
+        await client.db.pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_fruit_gardens_user
+            ON fruit_gardens (user_id)
+        `);
+
+        await client.db.pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_fruit_gardens_status
+            ON fruit_gardens (status)
+        `);
+
+        await client.db.pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_fruit_garden_inventory_user
+            ON fruit_garden_inventory (user_id)
+        `);
+
+        return true;
+    } catch (error) {
+        logger.error(
+            '[FRUITY GARDEN] Failed to create Garden database tables:',
+            error,
+        );
+
+        throw createError(
+            'Garden database setup failed',
+            ErrorTypes.DATABASE,
+            'The Fruity Garden database could not be initialized.',
+        );
+    }
+}
+
 function formatNumber(value) {
     return Number(value || 0).toLocaleString();
 }
@@ -40,22 +126,22 @@ function createGardenDisplay(garden) {
         slots.push(null);
     }
 
+    const fruitEmojis = {
+        strawberry: '🍓',
+        orange: '🍊',
+        apple: '🍎',
+        grapes: '🍇',
+        watermelon: '🍉',
+        blueberry: '🫐',
+        banana: '🍌',
+        cherries: '🍒',
+        peach: '🍑',
+    };
+
     const emojis = slots.map((fruitKey) => {
         if (!fruitKey) {
             return '🌱';
         }
-
-        const fruitEmojis = {
-            strawberry: '🍓',
-            orange: '🍊',
-            apple: '🍎',
-            grapes: '🍇',
-            watermelon: '🍉',
-            blueberry: '🫐',
-            banana: '🍌',
-            cherries: '🍒',
-            peach: '🍑',
-        };
 
         return fruitEmojis[fruitKey] || '🌱';
     });
@@ -136,6 +222,34 @@ function createGardenEmbed(user, garden) {
             text: 'Fruity Garden • Keep planting to grow your reward!',
         },
     };
+}
+
+function createGardenComponents(guildId, userId) {
+    return [
+        {
+            type: 1,
+            components: [
+                {
+                    type: 2,
+                    custom_id: `fg_plant:${guildId}:${userId}`,
+                    label: 'Plant',
+                    emoji: {
+                        name: '🌱',
+                    },
+                    style: 3,
+                },
+                {
+                    type: 2,
+                    custom_id: `fg_cashout:${guildId}:${userId}`,
+                    label: 'Cash Out',
+                    emoji: {
+                        name: '💰',
+                    },
+                    style: 1,
+                },
+            ],
+        },
+    ];
 }
 
 async function getGarden(client, guildId, userId) {
@@ -277,6 +391,16 @@ export default {
             }
 
             /*
+             * Create/verify the Garden tables before doing
+             * ANY Garden queries.
+             *
+             * This removes the requirement to run:
+             *
+             * npm run migrate
+             */
+            await ensureGardenTables(client);
+
+            /*
              * If the user already has an active garden,
              * resume it without charging another bet.
              */
@@ -301,33 +425,11 @@ export default {
                             ),
                         ],
 
-                        components: [
-                            {
-                                type: 1,
-                                components: [
-                                    {
-                                        type: 2,
-                                        custom_id:
-                                            `fg_plant:${guildId}:${userId}`,
-                                        label: 'Plant',
-                                        emoji: {
-                                            name: '🌱',
-                                        },
-                                        style: 3,
-                                    },
-                                    {
-                                        type: 2,
-                                        custom_id:
-                                            `fg_cashout:${guildId}:${userId}`,
-                                        label: 'Cash Out',
-                                        emoji: {
-                                            name: '💰',
-                                        },
-                                        style: 1,
-                                    },
-                                ],
-                            },
-                        ],
+                        components:
+                            createGardenComponents(
+                                guildId,
+                                userId,
+                            ),
                     },
                 );
 
@@ -404,9 +506,11 @@ export default {
 
             /*
              * IMPORTANT:
+             *
              * There is NO collector here.
              *
              * The buttons are handled by:
+             *
              * src/interactions/buttons/fruitGarden.js
              *
              * This means they continue working after
@@ -422,33 +526,11 @@ export default {
                         ),
                     ],
 
-                    components: [
-                        {
-                            type: 1,
-                            components: [
-                                {
-                                    type: 2,
-                                    custom_id:
-                                        `fg_plant:${guildId}:${userId}`,
-                                    label: 'Plant',
-                                    emoji: {
-                                        name: '🌱',
-                                    },
-                                    style: 3,
-                                },
-                                {
-                                    type: 2,
-                                    custom_id:
-                                        `fg_cashout:${guildId}:${userId}`,
-                                    label: 'Cash Out',
-                                    emoji: {
-                                        name: '💰',
-                                    },
-                                    style: 1,
-                                },
-                            ],
-                        },
-                    ],
+                    components:
+                        createGardenComponents(
+                            guildId,
+                            userId,
+                        ),
                 },
             );
 
