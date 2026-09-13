@@ -123,7 +123,7 @@ userData.lastGamble = now;
             } else {
                 resultEmbed.setFooter({
                     text:
-                }); Null
+                }); `Win chance was ${Math.round(winChance * 100)}%.`,
             }
 
             await InteractionHelper.safeEditReply(interaction, { embeds: [resultEmbed] });
