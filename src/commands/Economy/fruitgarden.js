@@ -5,16 +5,31 @@ import {
     ButtonBuilder,
     ButtonStyle,
 } from 'discord.js';
+
 import { getEconomyData, setEconomyData } from '../../utils/economy.js';
-import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
+import {
+    withErrorHandling,
+    createError,
+    ErrorTypes,
+} from '../../utils/errorHandler.js';
+
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+
+
+// ============================================================
+// SETTINGS
+// ============================================================
 
 const DEFAULT_BET = 100;
 const TOTAL_STEPS = 10;
 const FAILURE_CHANCE = 0.20;
 const INACTIVITY_TIMEOUT = 60_000;
 
-// Step 1 → Step 10 payout multipliers
+
+// ============================================================
+// PAYOUT MULTIPLIERS
+// ============================================================
+
 const MULTIPLIERS = [
     1.25,
     1.56,
@@ -27,6 +42,11 @@ const MULTIPLIERS = [
     7.45,
     9.31,
 ];
+
+
+// ============================================================
+// FRUITS
+// ============================================================
 
 const FRUITS = [
     '🍎',
@@ -43,99 +63,226 @@ const FRUITS = [
     '🍑',
 ];
 
+
+// ============================================================
+// HELPERS
+// ============================================================
+
 function formatMoney(amount) {
     return Math.floor(amount).toLocaleString('en-US');
 }
 
+
 function getMultiplier(step) {
-    return MULTIPLIERS[step - 1] ?? MULTIPLIERS[MULTIPLIERS.length - 1];
+    return (
+        MULTIPLIERS[step - 1] ??
+        MULTIPLIERS[MULTIPLIERS.length - 1]
+    );
 }
+
 
 function getPayout(bet, step) {
-    return Math.floor(bet * getMultiplier(step));
+    return Math.floor(
+        bet * getMultiplier(step)
+    );
 }
+
 
 function getRandomFruit() {
-    return FRUITS[Math.floor(Math.random() * FRUITS.length)];
+    return FRUITS[
+        Math.floor(
+            Math.random() * FRUITS.length
+        )
+    ];
 }
+
+
+// ============================================================
+// GARDEN GRID
+// ============================================================
+//
+// 10 tiles total:
+//
+// 🟩 🟩 🟩 🟩 🟩
+// 🟩 🟩 🟩 🟩 🟩
+//
+// The tiles are revealed from left → right.
+//
 
 function createGrid(tiles) {
-    return `${tiles.slice(0, 5).join('')}\n${tiles.slice(5, 10).join('')}`;
+    const firstRow = tiles
+        .slice(0, 5)
+        .join(' ');
+
+    const secondRow = tiles
+        .slice(5, 10)
+        .join(' ');
+
+    return [
+        firstRow,
+        secondRow,
+    ].join('\n');
 }
 
-function createDescription(bet, step, tiles) {
-    const currentPayout = step > 0 ? getPayout(bet, step) : 0;
-    const currentMultiplier = step > 0 ? getMultiplier(step) : 0;
 
-    const nextStep = step < TOTAL_STEPS ? step + 1 : TOTAL_STEPS;
+// ============================================================
+// DESCRIPTION
+// ============================================================
+
+function createDescription(
+    bet,
+    step,
+    tiles
+) {
+    const currentPayout =
+        step > 0
+            ? getPayout(bet, step)
+            : 0;
+
+    const currentMultiplier =
+        step > 0
+            ? getMultiplier(step)
+            : 0;
+
+
+    const nextStep =
+        step < TOTAL_STEPS
+            ? step + 1
+            : TOTAL_STEPS;
+
 
     const nextPayout =
         step < TOTAL_STEPS
-            ? getPayout(bet, nextStep)
+            ? getPayout(
+                bet,
+                nextStep
+            )
             : currentPayout;
+
 
     const nextMultiplier =
         step < TOTAL_STEPS
-            ? getMultiplier(nextStep)
+            ? getMultiplier(
+                nextStep
+            )
             : currentMultiplier;
 
+
     const currentText =
-        `${formatMoney(currentPayout)} (${currentMultiplier.toFixed(2)}x)`;
+        `${formatMoney(
+            currentPayout
+        )} (${currentMultiplier.toFixed(2)}x)`;
+
 
     const nextText =
         step < TOTAL_STEPS
-            ? `${formatMoney(nextPayout)} (${nextMultiplier.toFixed(2)}x)`
+            ? `${formatMoney(
+                nextPayout
+            )} (${nextMultiplier.toFixed(2)}x)`
             : 'MAX';
 
+
     return [
-        `**Bet:** ${formatMoney(bet)}`,
-        `**Steps:** ${TOTAL_STEPS}`,
-        `**Failure Chance:** ${(FAILURE_CHANCE * 100).toFixed(2)}%`,
-        '',
-        `**Cash Out:** ${currentText} | **Next:** ${nextText}`,
+        `**Bet:** ${formatMoney(bet)}   **Steps:** ${TOTAL_STEPS}   **Failure Chance:** ${(FAILURE_CHANCE * 100).toFixed(2)}%`,
+        `**Cash Out:** ${currentText}   **Next:** ${nextText}`,
         '',
         createGrid(tiles),
     ].join('\n');
 }
 
-function createButtons(bet, step) {
+
+// ============================================================
+// BUTTONS
+// ============================================================
+
+function createButtons(
+    bet,
+    step
+) {
     const currentPayout =
-        step > 0 ? getPayout(bet, step) : 0;
+        step > 0
+            ? getPayout(
+                bet,
+                step
+            )
+            : 0;
+
 
     const nextPayout =
         step < TOTAL_STEPS
-            ? getPayout(bet, step + 1)
+            ? getPayout(
+                bet,
+                step + 1
+            )
             : currentPayout;
 
-    const payoutAdded = Math.max(
-        0,
-        nextPayout - currentPayout
-    );
 
-    const harvest = new ButtonBuilder()
-        .setCustomId('fruitgarden_harvest')
-        .setLabel(
-            step >= TOTAL_STEPS
-                ? 'Harvest'
-                : `Harvest (+${formatMoney(payoutAdded)})`
-        )
-        .setEmoji('🌻')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(step >= TOTAL_STEPS);
+    const payoutAdded =
+        Math.max(
+            0,
+            nextPayout -
+            currentPayout
+        );
 
-    const cashOut = new ButtonBuilder()
-        .setCustomId('fruitgarden_cashout')
-        .setLabel(
-            `Cash Out: ${formatMoney(currentPayout)}`
-        )
-        .setStyle(ButtonStyle.Success)
-        .setDisabled(step <= 0);
 
-    return new ActionRowBuilder().addComponents(
-        harvest,
-        cashOut
-    );
+    // -------------------------
+    // HARVEST BUTTON
+    // -------------------------
+
+    const harvest =
+        new ButtonBuilder()
+            .setCustomId(
+                'fruitgarden_harvest'
+            )
+            .setLabel(
+                step >= TOTAL_STEPS
+                    ? 'Harvest'
+                    : `Harvest (+${formatMoney(
+                        payoutAdded
+                    )})`
+            )
+            .setEmoji('🌻')
+            .setStyle(
+                ButtonStyle.Primary
+            )
+            .setDisabled(
+                step >= TOTAL_STEPS
+            );
+
+
+    // -------------------------
+    // CASH OUT BUTTON
+    // -------------------------
+
+    const cashOut =
+        new ButtonBuilder()
+            .setCustomId(
+                'fruitgarden_cashout'
+            )
+            .setLabel(
+                `Cash Out: ${formatMoney(
+                    currentPayout
+                )}`
+            )
+            .setStyle(
+                ButtonStyle.Success
+            )
+            .setDisabled(
+                step <= 0
+            );
+
+
+    return new ActionRowBuilder()
+        .addComponents(
+            harvest,
+            cashOut
+        );
 }
+
+
+// ============================================================
+// EMBED
+// ============================================================
 
 function createEmbed(
     user,
@@ -148,7 +295,11 @@ function createEmbed(
     return new EmbedBuilder()
         .setTitle(title)
         .setDescription(
-            createDescription(bet, step, tiles)
+            createDescription(
+                bet,
+                step,
+                tiles
+            )
         )
         .setColor(color)
         .setFooter({
@@ -156,62 +307,126 @@ function createEmbed(
         });
 }
 
+
+// ============================================================
+// COMMAND
+// ============================================================
+
 export default {
+
     data: new SlashCommandBuilder()
-        .setName('fruitgarden')
+
+        .setName(
+            'fruitgarden'
+        )
+
         .setDescription(
             'Play Fruit Garden and gamble your cash'
         )
-        .addIntegerOption(option =>
-            option
-                .setName('amount')
-                .setDescription(
-                    'Amount of cash to bet (default: 100)'
-                )
-                .setRequired(false)
-                .setMinValue(1)
+
+        .addIntegerOption(
+            option =>
+                option
+                    .setName(
+                        'amount'
+                    )
+                    .setDescription(
+                        'Amount of cash to bet (default: 100)'
+                    )
+                    .setRequired(
+                        false
+                    )
+                    .setMinValue(
+                        1
+                    )
         ),
 
+
+    // ========================================================
+    // EXECUTE
+    // ========================================================
+
     execute: withErrorHandling(
-        async (interaction, config, client) => {
+
+        async (
+            interaction,
+            config,
+            client
+        ) => {
+
+            // ------------------------------------------------
+            // DEFER
+            // ------------------------------------------------
+
             const deferred =
                 await InteractionHelper.safeDefer(
                     interaction
                 );
 
-            if (!deferred) return;
+            if (!deferred) {
+                return;
+            }
 
-            const user = interaction.user;
-            const userId = user.id;
-            const guildId = interaction.guildId;
+
+            const user =
+                interaction.user;
+
+            const userId =
+                user.id;
+
+            const guildId =
+                interaction.guildId;
+
+
+            // ------------------------------------------------
+            // SERVER CHECK
+            // ------------------------------------------------
 
             if (!guildId) {
+
                 throw createError(
                     'Fruit Garden requires a guild',
                     ErrorTypes.VALIDATION,
                     'Fruit Garden can only be played inside a server.'
                 );
+
             }
 
-            // Works for both:
-            // /fruitgarden amount
-            // ,fg amount
+
+            // ------------------------------------------------
+            // BET
+            // ------------------------------------------------
+
             const suppliedAmount =
-                interaction.options.getInteger('amount');
+                interaction.options.getInteger(
+                    'amount'
+                );
+
 
             const bet =
-                suppliedAmount ?? DEFAULT_BET;
+                suppliedAmount ??
+                DEFAULT_BET;
+
 
             if (
-                !Number.isSafeInteger(bet) ||
+                !Number.isSafeInteger(
+                    bet
+                ) ||
                 bet <= 0
             ) {
+
                 throw createError(
                     'Invalid Fruit Garden bet',
                     ErrorTypes.VALIDATION,
                     'Your bet must be a positive whole number.'
                 );
+
             }
+
+
+            // ------------------------------------------------
+            // ECONOMY
+            // ------------------------------------------------
 
             const userData =
                 await getEconomyData(
@@ -220,23 +435,41 @@ export default {
                     userId
                 );
 
-            const wallet =
-                Number(userData.wallet) || 0;
 
-            if (wallet < bet) {
+            const wallet =
+                Number(
+                    userData.wallet
+                ) || 0;
+
+
+            if (
+                wallet < bet
+            ) {
+
                 throw createError(
                     'Insufficient cash for Fruit Garden',
                     ErrorTypes.VALIDATION,
-                    `You only have **$${formatMoney(wallet)}**, but your bet is **$${formatMoney(bet)}**.`,
+                    `You only have **$${formatMoney(
+                        wallet
+                    )}**, but your bet is **$${formatMoney(
+                        bet
+                    )}**.`,
                     {
                         required: bet,
                         current: wallet,
                     }
                 );
+
             }
 
-            // Take the bet immediately.
-            userData.wallet = wallet - bet;
+
+            // ------------------------------------------------
+            // TAKE BET
+            // ------------------------------------------------
+
+            userData.wallet =
+                wallet - bet;
+
 
             await setEconomyData(
                 client,
@@ -245,11 +478,26 @@ export default {
                 userData
             );
 
+
+            // ------------------------------------------------
+            // GAME STATE
+            // ------------------------------------------------
+
             let step = 0;
+
             let ended = false;
 
+
+            // All 10 tiles start hidden.
             const tiles =
-                Array(TOTAL_STEPS).fill('🟩');
+                Array(
+                    TOTAL_STEPS
+                ).fill('🟩');
+
+
+            // ------------------------------------------------
+            // INITIAL MESSAGE
+            // ------------------------------------------------
 
             const initialEmbed =
                 createEmbed(
@@ -259,108 +507,190 @@ export default {
                     tiles
                 );
 
+
             const initialRow =
                 createButtons(
                     bet,
                     step
                 );
 
+
             await InteractionHelper.safeEditReply(
                 interaction,
                 {
-                    embeds: [initialEmbed],
-                    components: [initialRow],
+                    embeds: [
+                        initialEmbed
+                    ],
+                    components: [
+                        initialRow
+                    ],
                 }
             );
+
 
             const gameMessage =
                 await interaction.fetchReply();
 
+
+            // ------------------------------------------------
+            // COLLECTOR
+            // ------------------------------------------------
+
             const collector =
-                gameMessage.createMessageComponentCollector({
-                    time: INACTIVITY_TIMEOUT,
-                });
-
-            const finish = async embed => {
-                ended = true;
-
-                collector.stop('finished');
-
-                await InteractionHelper.safeEditReply(
-                    interaction,
+                gameMessage.createMessageComponentCollector(
                     {
-                        embeds: [embed],
-                        components: [],
+                        time:
+                            INACTIVITY_TIMEOUT,
                     }
                 );
-            };
+
+
+            // ------------------------------------------------
+            // FINISH GAME
+            // ------------------------------------------------
+
+            const finish =
+                async embed => {
+
+                    ended = true;
+
+                    collector.stop(
+                        'finished'
+                    );
+
+
+                    await InteractionHelper.safeEditReply(
+                        interaction,
+                        {
+                            embeds: [
+                                embed
+                            ],
+                            components: [],
+                        }
+                    );
+
+                };
+
+
+            // =================================================
+            // BUTTON COLLECTOR
+            // =================================================
 
             collector.on(
                 'collect',
                 async buttonInteraction => {
-                    // Only the person who started the game
-                    // can use the buttons.
+
+                    // -----------------------------------------
+                    // SECURITY
+                    // -----------------------------------------
+
                     if (
-                        buttonInteraction.user.id !== userId
+                        buttonInteraction.user.id !==
+                        userId
                     ) {
-                        await buttonInteraction.reply({
-                            content:
-                                '❌ This is not your Fruit Garden game.',
-                            ephemeral: true,
-                        }).catch(() => {});
+
+                        await buttonInteraction
+                            .reply({
+                                content:
+                                    '❌ This is not your Fruit Garden game.',
+                                ephemeral:
+                                    true,
+                            })
+                            .catch(
+                                () => {}
+                            );
 
                         return;
                     }
+
+
+                    // -----------------------------------------
+                    // GAME ENDED
+                    // -----------------------------------------
 
                     if (ended) {
-                        await buttonInteraction.reply({
-                            content:
-                                '❌ This Fruit Garden game has already ended.',
-                            ephemeral: true,
-                        }).catch(() => {});
+
+                        await buttonInteraction
+                            .reply({
+                                content:
+                                    '❌ This Fruit Garden game has already ended.',
+                                ephemeral:
+                                    true,
+                            })
+                            .catch(
+                                () => {}
+                            );
 
                         return;
                     }
 
-                    // Reset inactivity timer after interaction.
+
+                    // -----------------------------------------
+                    // RESET TIMER
+                    // -----------------------------------------
+
                     collector.resetTimer();
+
 
                     await buttonInteraction
                         .deferUpdate()
-                        .catch(() => {});
+                        .catch(
+                            () => {}
+                        );
+
 
                     try {
-                        // =========================
+
+                        // =====================================
                         // HARVEST
-                        // =========================
+                        // =====================================
 
                         if (
                             buttonInteraction.customId ===
                             'fruitgarden_harvest'
                         ) {
-                            if (step >= TOTAL_STEPS) {
+
+                            if (
+                                step >=
+                                TOTAL_STEPS
+                            ) {
                                 return;
                             }
 
+
+                            // Move to next tile.
                             step += 1;
 
-                            // Fixed 20% failure chance.
+
+                            // ---------------------------------
+                            // FAILURE
+                            // ---------------------------------
+
                             if (
                                 Math.random() <
                                 FAILURE_CHANCE
                             ) {
-                                tiles[step - 1] =
-                                    '💥🐛';
 
-                                // Turn all unrevealed
-                                // tiles to the right red.
+                                // Failed tile.
+                                tiles[
+                                    step - 1
+                                ] = '💥🐛';
+
+
+                                // Everything after the
+                                // failed tile turns red.
                                 for (
                                     let index = step;
                                     index < TOTAL_STEPS;
                                     index += 1
                                 ) {
-                                    tiles[index] = '🟥';
+
+                                    tiles[
+                                        index
+                                    ] = '🟥';
+
                                 }
+
 
                                 const loseEmbed =
                                     createEmbed(
@@ -370,42 +700,63 @@ export default {
                                         tiles,
                                         '🍎 Fruit Garden — Game Over',
                                         0xED4245
-                                    ).setDescription(
-                                        `${createDescription(
-                                            bet,
-                                            step,
-                                            tiles
-                                        )}\n\n💥🐛 **You hit a bad tile!**\nYou lost **$${formatMoney(
-                                            bet
-                                        )}**.`
                                     );
+
+
+                                loseEmbed.setDescription(
+                                    `${createDescription(
+                                        bet,
+                                        step,
+                                        tiles
+                                    )}\n\n💥🐛 **You hit a bad tile!**\nYou lost **$${formatMoney(
+                                        bet
+                                    )}**.`
+                                );
+
 
                                 await finish(
                                     loseEmbed
                                 );
 
+
                                 return;
                             }
 
-                            // Safe tile = random fruit.
-                            tiles[step - 1] =
+
+                            // ---------------------------------
+                            // SAFE TILE
+                            // ---------------------------------
+
+                            tiles[
+                                step - 1
+                            ] =
                                 getRandomFruit();
 
-                            // Completed all 10 tiles.
+
+                            // ---------------------------------
+                            // JACKPOT
+                            // ---------------------------------
+
                             if (
-                                step === TOTAL_STEPS
+                                step ===
+                                TOTAL_STEPS
                             ) {
+
                                 const finalPayout =
                                     getPayout(
                                         bet,
                                         TOTAL_STEPS
                                     );
 
+
                                 userData.wallet =
-                                    (Number(
-                                        userData.wallet
-                                    ) || 0) +
+                                    (
+                                        Number(
+                                            userData.wallet
+                                        ) || 0
+                                    ) +
                                     finalPayout;
+
 
                                 await setEconomyData(
                                     client,
@@ -413,6 +764,7 @@ export default {
                                     userId,
                                     userData
                                 );
+
 
                                 const winEmbed =
                                     createEmbed(
@@ -422,22 +774,32 @@ export default {
                                         tiles,
                                         '🍎 Fruit Garden — Jackpot!',
                                         0xFEE75C
-                                    ).setDescription(
-                                        `${createDescription(
-                                            bet,
-                                            step,
-                                            tiles
-                                        )}\n\n🎉 **You harvested the entire garden!**\nYou received **$${formatMoney(
-                                            finalPayout
-                                        )}**.`
                                     );
+
+
+                                winEmbed.setDescription(
+                                    `${createDescription(
+                                        bet,
+                                        step,
+                                        tiles
+                                    )}\n\n🎉 **You harvested the entire garden!**\nYou received **$${formatMoney(
+                                        finalPayout
+                                    )}**.`
+                                );
+
 
                                 await finish(
                                     winEmbed
                                 );
 
+
                                 return;
                             }
+
+
+                            // ---------------------------------
+                            // UPDATE GARDEN
+                            // ---------------------------------
 
                             const updatedEmbed =
                                 createEmbed(
@@ -447,38 +809,46 @@ export default {
                                     tiles
                                 );
 
+
                             const updatedRow =
                                 createButtons(
                                     bet,
                                     step
                                 );
 
+
                             await InteractionHelper.safeEditReply(
                                 interaction,
                                 {
                                     embeds: [
-                                        updatedEmbed,
+                                        updatedEmbed
                                     ],
                                     components: [
-                                        updatedRow,
+                                        updatedRow
                                     ],
                                 }
                             );
 
+
                             return;
                         }
 
-                        // =========================
+
+                        // =====================================
                         // CASH OUT
-                        // =========================
+                        // =====================================
 
                         if (
                             buttonInteraction.customId ===
                             'fruitgarden_cashout'
                         ) {
-                            if (step <= 0) {
+
+                            if (
+                                step <= 0
+                            ) {
                                 return;
                             }
+
 
                             const payout =
                                 getPayout(
@@ -486,11 +856,15 @@ export default {
                                     step
                                 );
 
+
                             userData.wallet =
-                                (Number(
-                                    userData.wallet
-                                ) || 0) +
+                                (
+                                    Number(
+                                        userData.wallet
+                                    ) || 0
+                                ) +
                                 payout;
+
 
                             await setEconomyData(
                                 client,
@@ -498,6 +872,7 @@ export default {
                                 userId,
                                 userData
                             );
+
 
                             const cashoutEmbed =
                                 createEmbed(
@@ -507,71 +882,100 @@ export default {
                                     tiles,
                                     '🍎 Fruit Garden — Cashed Out',
                                     0x57F287
-                                ).setDescription(
-                                    `${createDescription(
-                                        bet,
-                                        step,
-                                        tiles
-                                    )}\n\n💰 **You cashed out $${formatMoney(
-                                        payout
-                                    )}!**`
                                 );
+
+
+                            cashoutEmbed.setDescription(
+                                `${createDescription(
+                                    bet,
+                                    step,
+                                    tiles
+                                )}\n\n💰 **You cashed out $${formatMoney(
+                                    payout
+                                )}!**`
+                            );
+
 
                             await finish(
                                 cashoutEmbed
                             );
+
                         }
-                    } catch (error) {
+
+                    } catch (
+                        error
+                    ) {
+
                         console.error(
                             'Fruit Garden button error:',
                             error
                         );
 
+
                         await buttonInteraction
                             .followUp({
                                 content:
                                     '❌ Something went wrong while processing your Fruit Garden game.',
-                                ephemeral: true,
+                                ephemeral:
+                                    true,
                             })
-                            .catch(() => {});
+                            .catch(
+                                () => {}
+                            );
+
                     }
+
                 }
             );
 
-            // =========================
-            // INACTIVITY TIMEOUT
-            // =========================
+
+            // =================================================
+            // TIMEOUT
+            // =================================================
 
             collector.on(
                 'end',
-                async (_collected, reason) => {
+                async (
+                    _collected,
+                    reason
+                ) => {
+
                     if (
-                        reason === 'finished' ||
+                        reason ===
+                            'finished' ||
                         ended
                     ) {
                         return;
                     }
 
+
                     ended = true;
 
-                    // If they harvested at least one
-                    // safe tile, automatically cash out
-                    // the current payout.
+
+                    // -----------------------------------------
+                    // AUTO CASH OUT
+                    // -----------------------------------------
+
                     if (
                         step > 0 &&
                         step < TOTAL_STEPS
                     ) {
+
                         const payout =
                             getPayout(
                                 bet,
                                 step
                             );
 
+
                         userData.wallet =
-                            (Number(
-                                userData.wallet
-                            ) || 0) +
+                            (
+                                Number(
+                                    userData.wallet
+                                ) || 0
+                            ) +
                             payout;
+
 
                         await setEconomyData(
                             client,
@@ -579,6 +983,7 @@ export default {
                             userId,
                             userData
                         );
+
 
                         const timeoutEmbed =
                             createEmbed(
@@ -588,30 +993,41 @@ export default {
                                 tiles,
                                 '🍎 Fruit Garden — Timed Out',
                                 0xFEE75C
-                            ).setDescription(
-                                `${createDescription(
-                                    bet,
-                                    step,
-                                    tiles
-                                )}\n\n⏰ **Game timed out.** Your current payout of **$${formatMoney(
-                                    payout
-                                )}** was automatically cashed out.`
                             );
+
+
+                        timeoutEmbed.setDescription(
+                            `${createDescription(
+                                bet,
+                                step,
+                                tiles
+                            )}\n\n⏰ **Game timed out.** Your current payout of **$${formatMoney(
+                                payout
+                            )}** was automatically cashed out.`
+                        );
+
 
                         await InteractionHelper.safeEditReply(
                             interaction,
                             {
                                 embeds: [
-                                    timeoutEmbed,
+                                    timeoutEmbed
                                 ],
                                 components: [],
                             }
-                        ).catch(() => {});
+                        ).catch(
+                            () => {}
+                        );
+
 
                         return;
                     }
 
-                    // No tile harvested = bet remains lost.
+
+                    // -----------------------------------------
+                    // TIMEOUT BEFORE FIRST HARVEST
+                    // -----------------------------------------
+
                     const timeoutEmbed =
                         createEmbed(
                             user,
@@ -620,26 +1036,38 @@ export default {
                             tiles,
                             '🍎 Fruit Garden — Timed Out',
                             0x95A5A6
-                        ).setDescription(
-                            `${createDescription(
-                                bet,
-                                step,
-                                tiles
-                            )}\n\n⏰ **Fruit Garden timed out before you harvested a tile.**`
                         );
+
+
+                    timeoutEmbed.setDescription(
+                        `${createDescription(
+                            bet,
+                            step,
+                            tiles
+                        )}\n\n⏰ **Fruit Garden timed out before you harvested a tile.**`
+                    );
+
 
                     await InteractionHelper.safeEditReply(
                         interaction,
                         {
-                            embeds: [timeoutEmbed],
+                            embeds: [
+                                timeoutEmbed
+                            ],
                             components: [],
                         }
-                    ).catch(() => {});
+                    ).catch(
+                        () => {}
+                    );
+
                 }
             );
+
         },
+
         {
-            command: 'fruitgarden',
+            command:
+                'fruitgarden',
         }
     ),
 };
