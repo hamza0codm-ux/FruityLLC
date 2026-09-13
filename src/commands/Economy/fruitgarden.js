@@ -12,7 +12,6 @@ import {
     createError,
     ErrorTypes,
 } from '../../utils/errorHandler.js';
-
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 
 
@@ -65,7 +64,7 @@ const FRUITS = [
 
 
 // ============================================================
-// HELPERS
+// MONEY
 // ============================================================
 
 function formatMoney(amount) {
@@ -73,54 +72,51 @@ function formatMoney(amount) {
 }
 
 
+// ============================================================
+// PAYOUT
+// ============================================================
+
 function getMultiplier(step) {
-    return (
-        MULTIPLIERS[step - 1] ??
-        MULTIPLIERS[MULTIPLIERS.length - 1]
-    );
+    return MULTIPLIERS[step - 1] ?? MULTIPLIERS[MULTIPLIERS.length - 1];
 }
 
 
 function getPayout(bet, step) {
-    return Math.floor(
-        bet * getMultiplier(step)
-    );
+    return Math.floor(bet * getMultiplier(step));
 }
 
+
+// ============================================================
+// RANDOM FRUIT
+// ============================================================
 
 function getRandomFruit() {
-    return FRUITS[
-        Math.floor(
-            Math.random() * FRUITS.length
-        )
-    ];
+    return FRUITS[Math.floor(Math.random() * FRUITS.length)];
 }
 
 
 // ============================================================
-// GARDEN GRID
+// GARDEN
 // ============================================================
 //
-// 10 tiles total:
+// 5 tiles per row:
 //
-// 🟩 🟩 🟩 🟩 🟩
-// 🟩 🟩 🟩 🟩 🟩
+// 🟩  🟩  🟩  🟩  🟩
+// 🟩  🟩  🟩  🟩  🟩
 //
-// The tiles are revealed from left → right.
+// Tiles reveal from left to right.
 //
 
-function createGrid(tiles) {
-    const firstRow = tiles
-        .slice(0, 5)
-        .join(' ');
-
-    const secondRow = tiles
-        .slice(5, 10)
-        .join(' ');
+function createGarden(tiles) {
+    const row1 = tiles.slice(0, 5).join('   ');
+    const row2 = tiles.slice(5, 10).join('   ');
 
     return [
-        firstRow,
-        secondRow,
+        '```',
+        row1,
+        '',
+        row2,
+        '```',
     ].join('\n');
 }
 
@@ -129,11 +125,7 @@ function createGrid(tiles) {
 // DESCRIPTION
 // ============================================================
 
-function createDescription(
-    bet,
-    step,
-    tiles
-) {
+function createDescription(bet, step, tiles) {
     const currentPayout =
         step > 0
             ? getPayout(bet, step)
@@ -144,49 +136,34 @@ function createDescription(
             ? getMultiplier(step)
             : 0;
 
-
     const nextStep =
         step < TOTAL_STEPS
             ? step + 1
             : TOTAL_STEPS;
 
-
     const nextPayout =
         step < TOTAL_STEPS
-            ? getPayout(
-                bet,
-                nextStep
-            )
+            ? getPayout(bet, nextStep)
             : currentPayout;
-
 
     const nextMultiplier =
         step < TOTAL_STEPS
-            ? getMultiplier(
-                nextStep
-            )
+            ? getMultiplier(nextStep)
             : currentMultiplier;
 
-
     const currentText =
-        `${formatMoney(
-            currentPayout
-        )} (${currentMultiplier.toFixed(2)}x)`;
-
+        `${formatMoney(currentPayout)} (${currentMultiplier.toFixed(2)}x)`;
 
     const nextText =
         step < TOTAL_STEPS
-            ? `${formatMoney(
-                nextPayout
-            )} (${nextMultiplier.toFixed(2)}x)`
+            ? `${formatMoney(nextPayout)} (${nextMultiplier.toFixed(2)}x)`
             : 'MAX';
-
 
     return [
         `**Bet:** ${formatMoney(bet)}   **Steps:** ${TOTAL_STEPS}   **Failure Chance:** ${(FAILURE_CHANCE * 100).toFixed(2)}%`,
         `**Cash Out:** ${currentText}   **Next:** ${nextText}`,
         '',
-        createGrid(tiles),
+        createGarden(tiles),
     ].join('\n');
 }
 
@@ -195,87 +172,53 @@ function createDescription(
 // BUTTONS
 // ============================================================
 
-function createButtons(
-    bet,
-    step
-) {
+function createButtons(bet, step) {
     const currentPayout =
         step > 0
-            ? getPayout(
-                bet,
-                step
-            )
+            ? getPayout(bet, step)
             : 0;
-
 
     const nextPayout =
         step < TOTAL_STEPS
-            ? getPayout(
-                bet,
-                step + 1
-            )
+            ? getPayout(bet, step + 1)
             : currentPayout;
-
 
     const payoutAdded =
         Math.max(
             0,
-            nextPayout -
-            currentPayout
+            nextPayout - currentPayout
         );
 
 
-    // -------------------------
-    // HARVEST BUTTON
-    // -------------------------
+    // HARVEST
 
-    const harvest =
+    const harvestButton =
         new ButtonBuilder()
-            .setCustomId(
-                'fruitgarden_harvest'
-            )
+            .setCustomId('fruitgarden_harvest')
             .setLabel(
-                step >= TOTAL_STEPS
-                    ? 'Harvest'
-                    : `Harvest (+${formatMoney(
-                        payoutAdded
-                    )})`
+                `Harvest (+${formatMoney(payoutAdded)})`
             )
             .setEmoji('🌻')
-            .setStyle(
-                ButtonStyle.Primary
-            )
-            .setDisabled(
-                step >= TOTAL_STEPS
-            );
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(step >= TOTAL_STEPS);
 
 
-    // -------------------------
-    // CASH OUT BUTTON
-    // -------------------------
+    // CASH OUT
 
-    const cashOut =
+    const cashOutButton =
         new ButtonBuilder()
-            .setCustomId(
-                'fruitgarden_cashout'
-            )
+            .setCustomId('fruitgarden_cashout')
             .setLabel(
-                `Cash Out: ${formatMoney(
-                    currentPayout
-                )}`
+                `Cash Out: ${formatMoney(currentPayout)}`
             )
-            .setStyle(
-                ButtonStyle.Success
-            )
-            .setDisabled(
-                step <= 0
-            );
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(step <= 0);
 
 
     return new ActionRowBuilder()
         .addComponents(
-            harvest,
-            cashOut
+            harvestButton,
+            cashOutButton
         );
 }
 
@@ -315,30 +258,18 @@ function createEmbed(
 export default {
 
     data: new SlashCommandBuilder()
-
-        .setName(
-            'fruitgarden'
-        )
-
+        .setName('fruitgarden')
         .setDescription(
             'Play Fruit Garden and gamble your cash'
         )
-
-        .addIntegerOption(
-            option =>
-                option
-                    .setName(
-                        'amount'
-                    )
-                    .setDescription(
-                        'Amount of cash to bet (default: 100)'
-                    )
-                    .setRequired(
-                        false
-                    )
-                    .setMinValue(
-                        1
-                    )
+        .addIntegerOption(option =>
+            option
+                .setName('amount')
+                .setDescription(
+                    'Amount of cash to bet (default: 100)'
+                )
+                .setRequired(false)
+                .setMinValue(1)
         ),
 
 
@@ -347,16 +278,7 @@ export default {
     // ========================================================
 
     execute: withErrorHandling(
-
-        async (
-            interaction,
-            config,
-            client
-        ) => {
-
-            // ------------------------------------------------
-            // DEFER
-            // ------------------------------------------------
+        async (interaction, config, client) => {
 
             const deferred =
                 await InteractionHelper.safeDefer(
@@ -378,55 +300,45 @@ export default {
                 interaction.guildId;
 
 
-            // ------------------------------------------------
-            // SERVER CHECK
-            // ------------------------------------------------
+            // =================================================
+            // GUILD CHECK
+            // =================================================
 
             if (!guildId) {
-
                 throw createError(
                     'Fruit Garden requires a guild',
                     ErrorTypes.VALIDATION,
                     'Fruit Garden can only be played inside a server.'
                 );
-
             }
 
 
-            // ------------------------------------------------
+            // =================================================
             // BET
-            // ------------------------------------------------
+            // =================================================
 
             const suppliedAmount =
-                interaction.options.getInteger(
-                    'amount'
-                );
-
+                interaction.options.getInteger('amount');
 
             const bet =
-                suppliedAmount ??
-                DEFAULT_BET;
+                suppliedAmount ?? DEFAULT_BET;
 
 
             if (
-                !Number.isSafeInteger(
-                    bet
-                ) ||
+                !Number.isSafeInteger(bet) ||
                 bet <= 0
             ) {
-
                 throw createError(
                     'Invalid Fruit Garden bet',
                     ErrorTypes.VALIDATION,
                     'Your bet must be a positive whole number.'
                 );
-
             }
 
 
-            // ------------------------------------------------
+            // =================================================
             // ECONOMY
-            // ------------------------------------------------
+            // =================================================
 
             const userData =
                 await getEconomyData(
@@ -435,41 +347,27 @@ export default {
                     userId
                 );
 
-
             const wallet =
-                Number(
-                    userData.wallet
-                ) || 0;
+                Number(userData.wallet) || 0;
 
 
-            if (
-                wallet < bet
-            ) {
-
+            if (wallet < bet) {
                 throw createError(
                     'Insufficient cash for Fruit Garden',
                     ErrorTypes.VALIDATION,
-                    `You only have **$${formatMoney(
-                        wallet
-                    )}**, but your bet is **$${formatMoney(
-                        bet
-                    )}**.`,
+                    `You only have **$${formatMoney(wallet)}**, but your bet is **$${formatMoney(bet)}**.`,
                     {
                         required: bet,
                         current: wallet,
                     }
                 );
-
             }
 
 
-            // ------------------------------------------------
-            // TAKE BET
-            // ------------------------------------------------
+            // Take the bet.
 
             userData.wallet =
                 wallet - bet;
-
 
             await setEconomyData(
                 client,
@@ -479,25 +377,23 @@ export default {
             );
 
 
-            // ------------------------------------------------
+            // =================================================
             // GAME STATE
-            // ------------------------------------------------
+            // =================================================
 
             let step = 0;
-
             let ended = false;
 
 
-            // All 10 tiles start hidden.
+            // Ten hidden tiles.
+
             const tiles =
-                Array(
-                    TOTAL_STEPS
-                ).fill('🟩');
+                Array(TOTAL_STEPS).fill('🟩');
 
 
-            // ------------------------------------------------
-            // INITIAL MESSAGE
-            // ------------------------------------------------
+            // =================================================
+            // SEND GAME
+            // =================================================
 
             const initialEmbed =
                 createEmbed(
@@ -507,8 +403,7 @@ export default {
                     tiles
                 );
 
-
-            const initialRow =
+            const initialButtons =
                 createButtons(
                     bet,
                     step
@@ -522,7 +417,7 @@ export default {
                         initialEmbed
                     ],
                     components: [
-                        initialRow
+                        initialButtons
                     ],
                 }
             );
@@ -532,22 +427,19 @@ export default {
                 await interaction.fetchReply();
 
 
-            // ------------------------------------------------
+            // =================================================
             // COLLECTOR
-            // ------------------------------------------------
+            // =================================================
 
             const collector =
-                gameMessage.createMessageComponentCollector(
-                    {
-                        time:
-                            INACTIVITY_TIMEOUT,
-                    }
-                );
+                gameMessage.createMessageComponentCollector({
+                    time: INACTIVITY_TIMEOUT,
+                });
 
 
-            // ------------------------------------------------
-            // FINISH GAME
-            // ------------------------------------------------
+            // =================================================
+            // FINISH
+            // =================================================
 
             const finish =
                 async embed => {
@@ -558,7 +450,6 @@ export default {
                         'finished'
                     );
 
-
                     await InteractionHelper.safeEditReply(
                         interaction,
                         {
@@ -568,82 +459,67 @@ export default {
                             components: [],
                         }
                     );
-
                 };
 
 
             // =================================================
-            // BUTTON COLLECTOR
+            // BUTTONS
             // =================================================
 
             collector.on(
                 'collect',
                 async buttonInteraction => {
 
-                    // -----------------------------------------
-                    // SECURITY
-                    // -----------------------------------------
+                    // ------------------------------------------------
+                    // ONLY OWNER CAN USE BUTTONS
+                    // ------------------------------------------------
 
                     if (
                         buttonInteraction.user.id !==
                         userId
                     ) {
 
-                        await buttonInteraction
-                            .reply({
-                                content:
-                                    '❌ This is not your Fruit Garden game.',
-                                ephemeral:
-                                    true,
-                            })
-                            .catch(
-                                () => {}
-                            );
+                        await buttonInteraction.reply({
+                            content:
+                                '❌ This is not your Fruit Garden game.',
+                            ephemeral: true,
+                        }).catch(() => {});
 
                         return;
                     }
 
 
-                    // -----------------------------------------
-                    // GAME ENDED
-                    // -----------------------------------------
+                    // ------------------------------------------------
+                    // ALREADY ENDED
+                    // ------------------------------------------------
 
                     if (ended) {
 
-                        await buttonInteraction
-                            .reply({
-                                content:
-                                    '❌ This Fruit Garden game has already ended.',
-                                ephemeral:
-                                    true,
-                            })
-                            .catch(
-                                () => {}
-                            );
+                        await buttonInteraction.reply({
+                            content:
+                                '❌ This Fruit Garden game has already ended.',
+                            ephemeral: true,
+                        }).catch(() => {});
 
                         return;
                     }
 
 
-                    // -----------------------------------------
-                    // RESET TIMER
-                    // -----------------------------------------
+                    // Reset 60 second timer.
 
                     collector.resetTimer();
 
 
                     await buttonInteraction
                         .deferUpdate()
-                        .catch(
-                            () => {}
-                        );
+                        .catch(() => {});
 
 
                     try {
 
-                        // =====================================
+                        // =================================================
                         // HARVEST
-                        // =====================================
+                        // =================================================
 
                         if (
                             buttonInteraction.customId ===
@@ -651,44 +527,44 @@ export default {
                         ) {
 
                             if (
-                                step >=
-                                TOTAL_STEPS
+                                step >= TOTAL_STEPS
                             ) {
                                 return;
                             }
 
 
-                            // Move to next tile.
+                            // Move forward one tile.
+
                             step += 1;
 
 
-                            // ---------------------------------
+                            // =================================================
                             // FAILURE
-                            // ---------------------------------
+                            // =================================================
 
                             if (
                                 Math.random() <
                                 FAILURE_CHANCE
                             ) {
 
-                                // Failed tile.
+                                // Bad tile.
+
                                 tiles[
                                     step - 1
                                 ] = '💥🐛';
 
 
-                                // Everything after the
-                                // failed tile turns red.
+                                // All tiles to the right
+                                // become red.
+
                                 for (
-                                    let index = step;
-                                    index < TOTAL_STEPS;
-                                    index += 1
+                                    let i = step;
+                                    i < TOTAL_STEPS;
+                                    i++
                                 ) {
 
-                                    tiles[
-                                        index
-                                    ] = '🟥';
-
+                                    tiles[i] =
+                                        '🟥';
                                 }
 
 
@@ -718,14 +594,13 @@ export default {
                                     loseEmbed
                                 );
 
-
                                 return;
                             }
 
 
-                            // ---------------------------------
+                            // =================================================
                             // SAFE TILE
-                            // ---------------------------------
+                            // =================================================
 
                             tiles[
                                 step - 1
@@ -733,9 +608,9 @@ export default {
                                 getRandomFruit();
 
 
-                            // ---------------------------------
-                            // JACKPOT
-                            // ---------------------------------
+                            // =================================================
+                            // COMPLETE GARDEN
+                            // =================================================
 
                             if (
                                 step ===
@@ -792,14 +667,13 @@ export default {
                                     winEmbed
                                 );
 
-
                                 return;
                             }
 
 
-                            // ---------------------------------
-                            // UPDATE GARDEN
-                            // ---------------------------------
+                            // =================================================
+                            // UPDATE GAME
+                            // =================================================
 
                             const updatedEmbed =
                                 createEmbed(
@@ -810,7 +684,7 @@ export default {
                                 );
 
 
-                            const updatedRow =
+                            const updatedButtons =
                                 createButtons(
                                     bet,
                                     step
@@ -824,7 +698,7 @@ export default {
                                         updatedEmbed
                                     ],
                                     components: [
-                                        updatedRow
+                                        updatedButtons
                                     ],
                                 }
                             );
@@ -834,9 +708,9 @@ export default {
                         }
 
 
-                        // =====================================
+                        // =================================================
                         // CASH OUT
-                        // =====================================
+                        // =================================================
 
                         if (
                             buttonInteraction.customId ===
@@ -900,11 +774,10 @@ export default {
                                 cashoutEmbed
                             );
 
+                            return;
                         }
 
-                    } catch (
-                        error
-                    ) {
+                    } catch (error) {
 
                         console.error(
                             'Fruit Garden button error:',
@@ -916,33 +789,24 @@ export default {
                             .followUp({
                                 content:
                                     '❌ Something went wrong while processing your Fruit Garden game.',
-                                ephemeral:
-                                    true,
+                                ephemeral: true,
                             })
-                            .catch(
-                                () => {}
-                            );
-
+                            .catch(() => {});
                     }
-
                 }
             );
 
 
             // =================================================
-            // TIMEOUT
+            // INACTIVITY TIMEOUT
             // =================================================
 
             collector.on(
                 'end',
-                async (
-                    _collected,
-                    reason
-                ) => {
+                async (_collected, reason) => {
 
                     if (
-                        reason ===
-                            'finished' ||
+                        reason === 'finished' ||
                         ended
                     ) {
                         return;
@@ -952,9 +816,9 @@ export default {
                     ended = true;
 
 
-                    // -----------------------------------------
+                    // =================================================
                     // AUTO CASH OUT
-                    // -----------------------------------------
+                    // =================================================
 
                     if (
                         step > 0 &&
@@ -1015,18 +879,16 @@ export default {
                                 ],
                                 components: [],
                             }
-                        ).catch(
-                            () => {}
-                        );
+                        ).catch(() => {});
 
 
                         return;
                     }
 
 
-                    // -----------------------------------------
-                    // TIMEOUT BEFORE FIRST HARVEST
-                    // -----------------------------------------
+                    // =================================================
+                    // NO HARVEST
+                    // =================================================
 
                     const timeoutEmbed =
                         createEmbed(
@@ -1056,18 +918,14 @@ export default {
                             ],
                             components: [],
                         }
-                    ).catch(
-                        () => {}
-                    );
+                    ).catch(() => {});
 
                 }
             );
 
         },
-
         {
-            command:
-                'fruitgarden',
+            command: 'fruitgarden',
         }
     ),
 };
