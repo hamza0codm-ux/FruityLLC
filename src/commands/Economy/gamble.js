@@ -122,7 +122,7 @@ userData.lastGamble = now;
                 });
             } else {
                 resultEmbed.setFooter({
-                    text: Null,
+                    text:
                 });
             }
 
