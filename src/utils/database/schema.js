@@ -209,107 +209,6 @@ export const tableStatements = [
         expires_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
-
-    /*
-     * Fruity Garden
-     *
-     * One active/current garden per user per guild.
-     */
-    `CREATE TABLE IF NOT EXISTS ${t.fruit_gardens} (
-        guild_id TEXT NOT NULL,
-        user_id TEXT NOT NULL,
-
-        bet BIGINT NOT NULL DEFAULT 100,
-
-        steps INTEGER NOT NULL DEFAULT 0,
-
-        current_multiplier NUMERIC(10, 4) NOT NULL DEFAULT 1.0000,
-
-        cash_out BIGINT NOT NULL DEFAULT 0,
-
-        failure_chance NUMERIC(6, 3) NOT NULL DEFAULT 20.000,
-
-        status VARCHAR(20) NOT NULL DEFAULT 'active',
-
-        garden JSONB NOT NULL DEFAULT '[]',
-
-        planted_fruit VARCHAR(50),
-
-        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-        completed_at TIMESTAMP,
-
-        PRIMARY KEY (guild_id, user_id),
-
-        FOREIGN KEY (guild_id)
-            REFERENCES ${t.guilds}(id)
-            ON DELETE CASCADE,
-
-        FOREIGN KEY (user_id)
-            REFERENCES ${t.users}(id)
-            ON DELETE CASCADE,
-
-        CONSTRAINT fruit_gardens_status_check
-            CHECK (
-                status IN (
-                    'active',
-                    'cashed_out',
-                    'failed',
-                    'completed'
-                )
-            ),
-
-        CONSTRAINT fruit_gardens_bet_check
-            CHECK (bet > 0),
-
-        CONSTRAINT fruit_gardens_steps_check
-            CHECK (steps >= 0),
-
-        CONSTRAINT fruit_gardens_cash_out_check
-            CHECK (cash_out >= 0),
-
-        CONSTRAINT fruit_gardens_failure_chance_check
-            CHECK (
-                failure_chance >= 0
-                AND failure_chance <= 100
-            )
-    )`,
-
-    /*
-     * Fruity Garden fruit collection.
-     */
-    `CREATE TABLE IF NOT EXISTS ${t.fruit_garden_inventory} (
-        guild_id TEXT NOT NULL,
-
-        user_id TEXT NOT NULL,
-
-        fruit_key VARCHAR(50) NOT NULL,
-
-        quantity BIGINT NOT NULL DEFAULT 0,
-
-        first_found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-        PRIMARY KEY (
-            guild_id,
-            user_id,
-            fruit_key
-        ),
-
-        FOREIGN KEY (guild_id)
-            REFERENCES ${t.guilds}(id)
-            ON DELETE CASCADE,
-
-        FOREIGN KEY (user_id)
-            REFERENCES ${t.users}(id)
-            ON DELETE CASCADE,
-
-        CONSTRAINT fruit_garden_inventory_quantity_check
-            CHECK (quantity >= 0)
-    )`,
 ];
 
 export const indexStatements = [
@@ -366,25 +265,6 @@ export const indexStatements = [
 
     `CREATE INDEX IF NOT EXISTS idx_cache_data_expires_at
         ON ${t.cache_data}(expires_at)`,
-
-    // Fruity Garden
-    `CREATE INDEX IF NOT EXISTS idx_fruit_gardens_guild_id
-        ON ${t.fruit_gardens}(guild_id)`,
-
-    `CREATE INDEX IF NOT EXISTS idx_fruit_gardens_status
-        ON ${t.fruit_gardens}(status)`,
-
-    `CREATE INDEX IF NOT EXISTS idx_fruit_gardens_updated_at
-        ON ${t.fruit_gardens}(updated_at)`,
-
-    `CREATE INDEX IF NOT EXISTS idx_fruit_garden_inventory_guild_id
-        ON ${t.fruit_garden_inventory}(guild_id)`,
-
-    `CREATE INDEX IF NOT EXISTS idx_fruit_garden_inventory_user_id
-        ON ${t.fruit_garden_inventory}(user_id)`,
-
-    `CREATE INDEX IF NOT EXISTS idx_fruit_garden_inventory_fruit_key
-        ON ${t.fruit_garden_inventory}(fruit_key)`,
 ];
 
 export const UPDATE_TIMESTAMP_FUNCTION = `
@@ -461,15 +341,5 @@ export const triggerDefinitions = [
     {
         name: 'update_afk_status_updated_at',
         table: t.afk_status,
-    },
-
-    {
-        name: 'update_fruit_gardens_updated_at',
-        table: t.fruit_gardens,
-    },
-
-    {
-        name: 'update_fruit_garden_inventory_updated_at',
-        table: t.fruit_garden_inventory,
     },
 ];
