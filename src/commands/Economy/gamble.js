@@ -123,7 +123,7 @@ userData.lastGamble = now;
             } else {
                 resultEmbed.setFooter({
                     text:
-                });
+                }); Null
             }
 
             await InteractionHelper.safeEditReply(interaction, { embeds: [resultEmbed] });
